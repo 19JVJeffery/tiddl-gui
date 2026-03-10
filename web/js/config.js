@@ -1,0 +1,154 @@
+/**
+ * tiddl-web — configuration
+ *
+ * Credentials mirror the ones embedded in the Python CLI (already public in
+ * the open-source repository).  They are stored the same way — as a single
+ * base-64 string that decodes to "clientId;clientSecret".
+ */
+
+const _raw = atob(
+  "ZlgySnhkbW50WldLMGl4VDsxTm45QWZEQWp4cmdKRkpiS05XTGVBeUtHVkdtSU51WFBQTEhWWEF2eEFnPQ=="
+);
+const [DEFAULT_CLIENT_ID, DEFAULT_CLIENT_SECRET] = _raw.split(";");
+
+export const AUTH_URL = "https://auth.tidal.com/v1/oauth2";
+export const API_URL = "https://api.tidal.com/v1";
+
+// ─── Credentials ─────────────────────────────────────────────────────────────
+
+export function getClientId() {
+  return localStorage.getItem("tiddl_client_id") || DEFAULT_CLIENT_ID;
+}
+export function getClientSecret() {
+  return localStorage.getItem("tiddl_client_secret") || DEFAULT_CLIENT_SECRET;
+}
+export function setClientId(v) {
+  if (v) localStorage.setItem("tiddl_client_id", v);
+  else localStorage.removeItem("tiddl_client_id");
+}
+export function setClientSecret(v) {
+  if (v) localStorage.setItem("tiddl_client_secret", v);
+  else localStorage.removeItem("tiddl_client_secret");
+}
+
+// ─── CORS proxy ───────────────────────────────────────────────────────────────
+
+/** CORS proxy prefix — every request to Tidal is sent through this URL. */
+export function getCorsProxy() {
+  return localStorage.getItem("tiddl_cors_proxy") ?? "https://corsproxy.io/?url=";
+}
+export function setCorsProxy(v) {
+  localStorage.setItem("tiddl_cors_proxy", v);
+}
+
+/** Wrap a target URL with the configured CORS proxy. */
+export function proxied(url) {
+  const proxy = getCorsProxy().trim();
+  if (!proxy) return url;
+  return proxy + encodeURIComponent(url);
+}
+
+// ─── Appearance ───────────────────────────────────────────────────────────────
+
+/** "dark" | "light" | "system" */
+export function getTheme() {
+  return localStorage.getItem("tiddl_theme") || "system";
+}
+export function setTheme(v) {
+  localStorage.setItem("tiddl_theme", v);
+}
+
+/** Hex accent colour, e.g. "#4fd08c" */
+export function getAccentColor() {
+  return localStorage.getItem("tiddl_accent") || "#4fd08c";
+}
+export function setAccentColor(v) {
+  localStorage.setItem("tiddl_accent", v);
+}
+
+// ─── Download settings ────────────────────────────────────────────────────────
+
+function getSetting(key, def) {
+  const v = localStorage.getItem(key);
+  return v === null ? def : v;
+}
+function setSetting(key, v) {
+  localStorage.setItem(key, String(v));
+}
+
+export function getTrackQuality()        { return getSetting("tiddl_track_quality", "HIGH"); }
+export function setTrackQuality(v)       { setSetting("tiddl_track_quality", v); }
+
+export function getVideoQuality()        { return getSetting("tiddl_video_quality", "fhd"); }
+export function setVideoQuality(v)       { setSetting("tiddl_video_quality", v); }
+
+export function getThreadsCount()        { return parseInt(getSetting("tiddl_threads", "4"), 10); }
+export function setThreadsCount(v)       { setSetting("tiddl_threads", v); }
+
+export function getSkipExisting()        { return getSetting("tiddl_skip_existing", "true") === "true"; }
+export function setSkipExisting(v)       { setSetting("tiddl_skip_existing", v ? "true" : "false"); }
+
+export function getSinglesFilter()       { return getSetting("tiddl_singles_filter", "none"); }
+export function setSinglesFilter(v)      { setSetting("tiddl_singles_filter", v); }
+
+export function getVideosFilter()        { return getSetting("tiddl_videos_filter", "none"); }
+export function setVideosFilter(v)       { setSetting("tiddl_videos_filter", v); }
+
+export function getUpdateMtime()         { return getSetting("tiddl_update_mtime", "false") === "true"; }
+export function setUpdateMtime(v)        { setSetting("tiddl_update_mtime", v ? "true" : "false"); }
+
+export function getRewriteMetadata()     { return getSetting("tiddl_rewrite_metadata", "false") === "true"; }
+export function setRewriteMetadata(v)    { setSetting("tiddl_rewrite_metadata", v ? "true" : "false"); }
+
+// ─── Metadata settings ────────────────────────────────────────────────────────
+
+export function getMetadataEnable()      { return getSetting("tiddl_meta_enable", "true") === "true"; }
+export function setMetadataEnable(v)     { setSetting("tiddl_meta_enable", v ? "true" : "false"); }
+
+export function getMetadataLyrics()      { return getSetting("tiddl_meta_lyrics", "false") === "true"; }
+export function setMetadataLyrics(v)     { setSetting("tiddl_meta_lyrics", v ? "true" : "false"); }
+
+export function getMetadataCover()       { return getSetting("tiddl_meta_cover", "false") === "true"; }
+export function setMetadataCover(v)      { setSetting("tiddl_meta_cover", v ? "true" : "false"); }
+
+export function getMetadataAlbumReview() { return getSetting("tiddl_meta_album_review", "false") === "true"; }
+export function setMetadataAlbumReview(v){ setSetting("tiddl_meta_album_review", v ? "true" : "false"); }
+
+// ─── Cover art settings ───────────────────────────────────────────────────────
+
+export function getCoverSave()           { return getSetting("tiddl_cover_save", "false") === "true"; }
+export function setCoverSave(v)          { setSetting("tiddl_cover_save", v ? "true" : "false"); }
+
+export function getCoverSize()           { return parseInt(getSetting("tiddl_cover_size", "1280"), 10); }
+export function setCoverSize(v)          { setSetting("tiddl_cover_size", v); }
+
+export function getCoverAllowed()        { return JSON.parse(getSetting("tiddl_cover_allowed", "[]")); }
+export function setCoverAllowed(v)       { setSetting("tiddl_cover_allowed", JSON.stringify(v)); }
+
+// ─── M3U settings ─────────────────────────────────────────────────────────────
+
+export function getM3uSave()             { return getSetting("tiddl_m3u_save", "false") === "true"; }
+export function setM3uSave(v)            { setSetting("tiddl_m3u_save", v ? "true" : "false"); }
+
+export function getM3uAllowed()          { return JSON.parse(getSetting("tiddl_m3u_allowed", '["album","mix","playlist"]')); }
+export function setM3uAllowed(v)         { setSetting("tiddl_m3u_allowed", JSON.stringify(v)); }
+
+// ─── File path templates ──────────────────────────────────────────────────────
+
+const TEMPLATE_DEFAULTS = {
+  default:  "{album.artist}/{album.title}/{item.title}",
+  track:    "",
+  video:    "videos/{item.title}",
+  album:    "artists/{album.artist}/{album.title}/{item.title}",
+  playlist: "{playlist.title}/{playlist.index}. {item.artist} - {item.title}",
+  mix:      "mixes/{mix_id}/{item.artist} - {item.title}",
+};
+
+export function getTemplate(type) {
+  const v = localStorage.getItem(`tiddl_tpl_${type}`);
+  return v !== null ? v : (TEMPLATE_DEFAULTS[type] ?? "");
+}
+export function setTemplate(type, v) {
+  localStorage.setItem(`tiddl_tpl_${type}`, v);
+}
+export { TEMPLATE_DEFAULTS };

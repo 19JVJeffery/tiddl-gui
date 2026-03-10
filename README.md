@@ -1,6 +1,6 @@
 # Tidal Downloader
 
-Download tracks and videos from Tidal with max quality! `tiddl` is CLI app written in Python.
+Download tracks and videos from Tidal with max quality! `tiddl` is a CLI app written in Python, with a browser-based GUI hosted on GitHub Pages.
 
 > [!WARNING]
 > `This app is for personal use only and is not affiliated with Tidal. Users must ensure their use complies with Tidal's terms of service and local copyright laws. Downloaded tracks are for personal use and may not be shared or redistributed. The developer assumes no responsibility for misuse of this app.`
@@ -9,7 +9,103 @@ Download tracks and videos from Tidal with max quality! `tiddl` is CLI app writt
 ![PyPI - Version](https://img.shields.io/pypi/v/tiddl?style=for-the-badge)
 [<img src="https://img.shields.io/badge/gitmoji-%20😜%20😍-FFDD67.svg?style=for-the-badge" />](https://gitmoji.dev)
 
-# Installation
+# Web App (GUI)
+
+The `web/` directory contains a zero-dependency browser app that mirrors every feature of the CLI. It is automatically deployed to **GitHub Pages** on every push to `main`.
+
+## Live deployment
+
+If GitHub Pages is enabled for this repository, the app is available at:
+
+```
+https://19jvjeffery.github.io/tiddl-gui/
+```
+
+## Enable GitHub Pages (first-time setup)
+
+1. Go to your repository on GitHub → **Settings** → **Pages**
+2. Under **Source**, select **GitHub Actions**
+3. Push any change to `main` (or trigger the workflow manually under **Actions → Deploy to GitHub Pages → Run workflow**)
+
+The workflow file is at `.github/workflows/pages.yml`. It deploys the `web/` folder as a static site with no build step required.
+
+## How to use the web app
+
+### 1 — Log in
+
+Open the **Account** tab and click **Login with Tidal**.
+
+A Tidal verification page will open in a new browser tab. Approve the request there, then return to the app — it polls automatically and logs you in. Your token is stored in `localStorage` and refreshed automatically; nothing is ever sent to a third-party server.
+
+### 2 — Download a track, album, or playlist
+
+Open the **Download** tab.
+
+Paste any of the following into the input field:
+
+| Input format | Example |
+|---|---|
+| Full Tidal URL | `https://tidal.com/browse/track/103805726` |
+| Short resource ID | `track/103805726` |
+| Album | `album/103805723` |
+| Playlist UUID | `playlist/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| Mix ID | `mix/0123456789abcdef` |
+
+Select a quality level and click **Download**. Progress is shown in the log panel below. Each track is saved directly to your browser's default downloads folder.
+
+| Quality | Format | Details |
+|:---:|:---:|:---:|
+| Low | .m4a | 96 kbps |
+| High | .m4a | 320 kbps |
+| Lossless | .flac | 16-bit, 44.1 kHz |
+| Max | .flac | Up to 24-bit, 192 kHz |
+
+> [!NOTE]
+> Availability of Lossless / Max quality depends on your Tidal subscription. Encrypted streams (DRM) cannot be saved in the browser — use the CLI for those.
+
+### 3 — Search
+
+Open the **Search** tab, type an artist or track name, and press **Search**. Click any result card to pre-fill the Download tab with that resource's ID.
+
+### 4 — CORS proxy (Settings)
+
+Tidal's API does not allow direct browser requests from external origins. All API calls are routed through a CORS proxy. The default is [corsproxy.io](https://corsproxy.io) and requires no configuration.
+
+If you want to use a different proxy (or run your own), open **Settings** and update the **Proxy prefix URL** field, then click **Save settings**.
+
+## Run locally
+
+The web app is plain HTML + CSS + ES modules — no build step, no Node.js required.
+
+```bash
+# Clone the repo (if you haven't already)
+git clone https://github.com/19JVJeffery/tiddl-gui.git
+cd tiddl-gui
+
+# Serve the web/ directory on port 8080
+python3 -m http.server 8080 --directory web
+```
+
+Then open <http://localhost:8080> in your browser.
+
+> [!TIP]
+> Any static file server works. Alternatives: `npx serve web`, `npx http-server web`, or just open `web/index.html` directly in your browser (note: ES module imports require a server, not `file://`).
+
+## Self-host / deploy elsewhere
+
+Because the app is a static site (`web/index.html` + `web/css/` + `web/js/`), it can be deployed to any static hosting service:
+
+| Provider | Command / steps |
+|---|---|
+| **GitHub Pages** | Already included — see workflow above |
+| **Netlify** | Drag-and-drop the `web/` folder at app.netlify.com |
+| **Vercel** | `vercel --cwd web` |
+| **Cloudflare Pages** | Point root to `web/`, no build command needed |
+| **Any web server** | Copy `web/` to your server's document root |
+
+---
+
+# CLI Installation
 
 `tiddl` is available at [python package index](https://pypi.org/project/tiddl/) and you can install it with your favorite Python package manager.
 

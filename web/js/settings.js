@@ -324,6 +324,7 @@ function setChk(id, v)  { const e = el(id); if (e) e.checked = v; }
 
 export function loadSettingsForm() {
   setVal("proxy-input",              getCorsProxy());
+  // Show blank when the user has not overridden the built-in defaults
   setVal("client-id-input",          localStorage.getItem("tiddl_client_id")     || "");
   setVal("client-secret-input",      localStorage.getItem("tiddl_client_secret") || "");
 
@@ -456,27 +457,31 @@ export function initAccentColorUI(appendLog) {
 
 // ─── Theme toggle ──────────────────────────────────────────────────────────────
 
+/** Cycle through themes: dark → light → system → dark. Returns the new theme value. */
+export function cycleTheme() {
+  const current = getTheme();
+  const next = current === "dark" ? "light" : current === "light" ? "system" : "dark";
+  setTheme(next);
+  applyTheme(next);
+  document.querySelectorAll(".seg-btn[data-theme-val]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.themeVal === next)
+  );
+  return next;
+}
+
 export function initThemeUI() {
+  // Segmented control inside Settings panel
   document.querySelectorAll(".seg-btn[data-theme-val]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const val = btn.dataset.themeVal;
       setTheme(val);
       applyTheme(val);
-    });
-  });
-
-  // Header quick-toggle (cycles dark → light → system)
-  const headerToggle = el("theme-toggle");
-  if (headerToggle) {
-    headerToggle.addEventListener("click", () => {
-      const current = getTheme();
-      const next = current === "dark" ? "light" : current === "light" ? "system" : "dark";
-      setTheme(next);
-      applyTheme(next);
-      // Also sync the segmented control
+      // Sync all other seg-btns (in case there are duplicates)
       document.querySelectorAll(".seg-btn[data-theme-val]").forEach((b) =>
-        b.classList.toggle("active", b.dataset.themeVal === next)
+        b.classList.toggle("active", b.dataset.themeVal === val)
       );
     });
-  }
+  });
+  // Note: the header quick-toggle (#theme-toggle) is wired in app.js so it can
+  // also update the theme icon; do NOT add a second handler here.
 }

@@ -78,6 +78,19 @@
         </button>
       </div>
 
+      <!-- Download queue (populated when user clicks search results) -->
+      <div id="download-queue-section" class="download-queue-section hidden">
+        <div class="download-queue-header">
+          <span class="download-queue-title">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            Queue
+            <span id="queue-count" class="queue-count">0</span>
+          </span>
+          <button id="btn-clear-queue" class="btn-ghost" style="font-size:0.75rem;padding:0.2rem 0.65rem">Clear all</button>
+        </div>
+        <div id="download-queue" class="download-queue" aria-label="Download queue"></div>
+      </div>
+
       <div class="progress-section">
         <div class="progress-track">
           <div id="progress-bar" class="progress-fill" style="width:0%"></div>

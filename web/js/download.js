@@ -79,6 +79,40 @@ function parseStreamManifest(streamInfo) {
 // ─── Segment fetching ──────────────────────────────────────────────────────
 
 /**
+ * Fetch a single segment URL, trying direct first and falling back to the
+ * configured CORS proxy.
+ *
+ * CDN segment URLs (e.g. Amazon CloudFront / Akamai) carry their own
+ * time-limited auth tokens and are often accessible directly from the browser.
+ * Using a CORS proxy can cause 403s because some CDNs bind the token to the
+ * originating IP, which changes when traffic is routed via a proxy server.
+ * Direct fetch is therefore attempted first; the proxy is only used if the
+ * direct request fails (e.g. due to a CORS restriction in the browser).
+ */
+async function fetchSegment(url) {
+  // 1. Try direct (no proxy) — works for most CDN segments
+  try {
+    const res = await fetch(url);
+    if (res.ok) return res;
+    // Non-2xx from CDN — fall through to proxy attempt
+  } catch {
+    // Network / CORS error — fall through
+  }
+
+  // 2. Fall back to proxy
+  const proxiedUrl = proxied(url);
+  if (proxiedUrl === url) {
+    // Proxy not configured; nothing more to try
+    throw new Error(`Segment fetch failed (no proxy configured): ${url}`);
+  }
+  const res2 = await fetch(proxiedUrl);
+  if (!res2.ok) {
+    throw new Error(`Segment fetch failed: ${res2.status} ${url}`);
+  }
+  return res2;
+}
+
+/**
  * Fetch all segment URLs and concatenate them into a single Uint8Array.
  * Calls onProgress(downloaded, total) after each segment.
  */
@@ -88,8 +122,7 @@ async function fetchSegments(urls, onProgress) {
   const total = urls.length;
 
   for (const url of urls) {
-    const res = await fetch(proxied(url));
-    if (!res.ok) throw new Error(`Segment fetch failed: ${res.status} ${url}`);
+    const res = await fetchSegment(url);
     const buf = await res.arrayBuffer();
     chunks.push(new Uint8Array(buf));
     downloaded++;

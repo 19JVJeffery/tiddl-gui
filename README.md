@@ -1,53 +1,17 @@
 # tiddl-gui
 
-> A fork of [tiddl](https://github.com/oskvr37/tiddl) that adds a browser-based GUI. Download Tidal tracks, albums, and playlists at maximum quality — from your browser or the command line.
+> Download Tidal tracks, albums, and playlists at maximum quality — straight from your browser or the command line.
 
 > [!WARNING]
 > This app is for personal use only and is not affiliated with Tidal. Users must ensure their use complies with Tidal's terms of service and local copyright laws. Downloaded tracks are for personal use and may not be shared or redistributed. The developer assumes no responsibility for misuse of this app.
 
-![PyPI - Downloads](https://img.shields.io/pypi/dm/tiddl?style=for-the-badge&color=%2332af64)
-![PyPI - Version](https://img.shields.io/pypi/v/tiddl?style=for-the-badge)
+# Web App
 
-## What's different about this fork
+**Live app: <https://19jvjeffery.github.io/tiddl-gui/>**
 
-The original [tiddl](https://github.com/oskvr37/tiddl) is a CLI-only tool. This fork adds a zero-dependency browser GUI (`web/`) that is automatically deployed to **GitHub Pages**, so you can download tracks without installing anything.
+No installation needed — open the link and go.
 
-## Repository layout
-
-```
-tiddl-gui/
-├── .github/workflows/   # CI: GitHub Pages deploy, Docker, PyPI publish
-├── docs/
-│   ├── examples/        # Python usage examples
-│   ├── config.example.toml
-│   └── templating.md
-├── tests/               # Python test suite
-├── tiddl/               # Python CLI source (inherited from tiddl)
-└── web/                 # Browser GUI (deployed to GitHub Pages)
-    ├── css/
-    ├── js/
-    └── index.html
-```
-
----
-
-# Web App (GUI)
-
-The `web/` directory is a plain HTML + CSS + ES-modules app — no build step, no Node.js required. It is automatically deployed to GitHub Pages on every push to `main`.
-
-## Live app
-
-**<https://19jvjeffery.github.io/tiddl-gui/>**
-
-## Enable GitHub Pages (first-time setup)
-
-1. Go to your repository → **Settings → Pages**
-2. Under **Source**, select **GitHub Actions**
-3. Push any change to `main` (or run the workflow manually: **Actions → Deploy to GitHub Pages → Run workflow**)
-
-The workflow is at `.github/workflows/pages.yml` and requires no configuration.
-
-## How to use the web app
+## How to use
 
 ### 1 — Log in
 
@@ -102,8 +66,6 @@ Open <http://localhost:8080>. Any static file server works (`npx serve web`, `np
 ---
 
 # CLI
-
-The CLI is inherited from the upstream [tiddl](https://github.com/oskvr37/tiddl) project and supports everything the GUI does, plus DRM-protected streams.
 
 ## Installation
 
@@ -170,28 +132,3 @@ Set `TIDDL_PATH` to use a different location:
 ```bash
 TIDDL_PATH=~/custom/tiddl tiddl auth login
 ```
-
----
-
-# Development
-
-```bash
-git clone https://github.com/19JVJeffery/tiddl-gui.git
-cd tiddl-gui
-uv venv && source .venv/bin/activate
-uv pip install -e .
-```
-
-Run the tests:
-
-```bash
-pytest
-```
-
----
-
-# Resources
-
-- [oskvr37/tiddl](https://github.com/oskvr37/tiddl) — upstream CLI project this fork is based on
-- [Tidal API wiki](https://github.com/Fokka-Engineering/TIDAL) — community-documented API endpoints
-- [Tidal-Media-Downloader](https://github.com/yaronzz/Tidal-Media-Downloader) — original inspiration

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,20 +7,21 @@
   <meta name="description" content="Download Tidal tracks, albums and playlists — now in your browser." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap"
-    rel="stylesheet"
-  />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 
-<!-- ─── Header ────────────────────────────────────────────────────────── -->
+<!-- ─── Header ──────────────────────────────────────────────────────────── -->
 <header>
   <div class="logo">tiddl <span>♫ tidal downloader</span></div>
   <div class="header-spacer"></div>
   <span id="auth-badge" class="auth-badge auth-badge--out">Not logged in</span>
   <button id="btn-logout" class="btn-logout hidden">Logout</button>
+  <button id="theme-toggle" class="theme-toggle-btn" title="Toggle theme" aria-label="Toggle theme">
+    <!-- icon swapped by JS -->
+    <svg id="theme-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+  </button>
 </header>
 
 <div class="layout">
@@ -28,19 +29,19 @@
   <!-- ─── Sidebar ─────────────────────────────────────────────────────── -->
   <nav class="sidebar">
     <button class="tab-btn" data-tab="download">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
       Download
     </button>
     <button class="tab-btn" data-tab="search">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       Search
     </button>
     <button class="tab-btn" data-tab="auth">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       Account
     </button>
     <button class="tab-btn" data-tab="settings">
-      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
       Settings
     </button>
   </nav>
@@ -51,20 +52,16 @@
     <!-- ── Download panel ──────────────────────────────────────────────── -->
     <section id="panel-download" class="tab-panel hidden">
       <h2 class="panel-title">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
         Download
       </h2>
 
       <div class="download-row">
         <div class="input-group">
-          <label for="url-input">Tidal URL or ID</label>
-          <input
-            id="url-input"
-            type="text"
+          <label for="url-input">Tidal URL or resource ID</label>
+          <input id="url-input" type="text"
             placeholder="https://tidal.com/browse/track/… or track/12345678"
-            autocomplete="off"
-            spellcheck="false"
-          />
+            autocomplete="off" spellcheck="false" />
         </div>
         <div class="input-group quality-select-wrap">
           <label for="quality-select">Quality</label>
@@ -75,23 +72,25 @@
             <option value="HI_RES_LOSSLESS">Max (FLAC up to 24-bit)</option>
           </select>
         </div>
-        <button id="btn-download" class="btn-primary">Download</button>
+        <button id="btn-download" class="btn-primary">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" style="vertical-align:-2px;margin-right:4px"><path d="M12 3v13m0 0-4-4m4 4 4-4"/></svg>
+          Download
+        </button>
       </div>
 
       <div class="progress-section">
         <div class="progress-track">
-          <div id="progress-bar" class="progress-fill"></div>
+          <div id="progress-bar" class="progress-fill" style="width:0%"></div>
         </div>
         <div id="progress-label" class="progress-label">Idle</div>
       </div>
 
       <div id="download-log" class="log-box" aria-label="Download log" role="log" aria-live="polite"></div>
 
-      <p style="margin-top:0.75rem; font-size:0.82rem; color:var(--text-muted);">
-        Supported inputs: full Tidal URLs, or short-form IDs like
-        <code>track/103805726</code>, <code>album/103805723</code>, <code>playlist/uuid</code>.
-        <br>
-        <strong>Note:</strong> Downloads require a CORS proxy. Configure one in Settings if needed.
+      <p class="download-hint">
+        Supported: full Tidal URLs, or short-form IDs like
+        <code>track/103805726</code>, <code>album/103805723</code>, <code>playlist/uuid</code>, <code>mix/id</code>.
+        Downloads require a CORS proxy — configure one in Settings if needed.
         Encrypted streams cannot be saved in the browser.
       </p>
     </section>
@@ -99,13 +98,21 @@
     <!-- ── Search panel ────────────────────────────────────────────────── -->
     <section id="panel-search" class="tab-panel hidden">
       <h2 class="panel-title">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         Search
       </h2>
 
       <div class="search-row">
-        <input id="search-input" type="text" placeholder="Artist, track, album…" autocomplete="off" />
+        <input id="search-input" type="text" placeholder="Artist, track, album, playlist…" autocomplete="off" />
         <button id="btn-search" class="btn-primary">Search</button>
+      </div>
+
+      <div class="search-type-pills" id="search-type-pills">
+        <button class="type-pill active" data-type="all">All</button>
+        <button class="type-pill" data-type="tracks">Tracks</button>
+        <button class="type-pill" data-type="albums">Albums</button>
+        <button class="type-pill" data-type="artists">Artists</button>
+        <button class="type-pill" data-type="playlists">Playlists</button>
       </div>
 
       <div id="search-results"></div>
@@ -114,15 +121,15 @@
     <!-- ── Auth panel ──────────────────────────────────────────────────── -->
     <section id="panel-auth" class="tab-panel hidden">
       <h2 class="panel-title">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         Account
       </h2>
 
       <div class="auth-card">
         <p>
           Sign in with your Tidal account using the secure device-code flow.
-          You will be redirected to Tidal's login page in a new tab — no password is
-          ever entered here.
+          You will be redirected to Tidal's login page in a new tab —
+          no password is ever entered here.
         </p>
         <button id="btn-login" class="btn-login-big">Login with Tidal</button>
         <div id="login-status"></div>
@@ -132,40 +139,347 @@
     <!-- ── Settings panel ──────────────────────────────────────────────── -->
     <section id="panel-settings" class="tab-panel hidden">
       <h2 class="panel-title">
-        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
         Settings
       </h2>
 
-      <div class="settings-section">
-        <h3>CORS Proxy</h3>
-        <p>
-          Tidal's API does not allow direct browser requests from external origins.
-          A CORS proxy forwards your requests to Tidal and adds the necessary headers.
-          The default uses <a href="https://corsproxy.io" target="_blank" rel="noopener">corsproxy.io</a>.
-          Leave empty to attempt direct requests (may fail).
-        </p>
-        <label class="field-label" for="proxy-input">Proxy prefix URL</label>
-        <input
-          id="proxy-input"
-          type="url"
-          placeholder="https://corsproxy.io/?url="
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <button id="btn-save-settings" class="btn-secondary">Save settings</button>
-      </div>
+      <div class="settings-wrapper">
 
-      <div class="settings-section">
-        <h3>About</h3>
-        <p>
-          <strong>tiddl-web</strong> is the browser-based front-end for
-          <a href="https://github.com/oskvr37/tiddl" target="_blank" rel="noopener">tiddl</a>,
-          the open-source Tidal downloader.<br/><br/>
-          Authentication tokens are stored in your browser's <code>localStorage</code>
-          and never leave your device.<br/><br/>
-          For best results, install <a href="https://github.com/oskvr37/tiddl" target="_blank" rel="noopener">the CLI version</a>
-          which supports full quality, metadata, and format conversion via ffmpeg.
-        </p>
+        <!-- Appearance -->
+        <div class="settings-section">
+          <h3>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            Appearance
+          </h3>
+
+          <div class="field-group">
+            <label class="field-label">Theme</label>
+            <div class="segmented-control">
+              <button class="seg-btn" data-theme-val="system">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                System
+              </button>
+              <button class="seg-btn" data-theme-val="dark">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                Dark
+              </button>
+              <button class="seg-btn" data-theme-val="light">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                Light
+              </button>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Accent Colour</label>
+            <div class="color-swatches">
+              <button class="swatch" data-color="#4fd08c" style="--c:#4fd08c" title="Green (default)" aria-label="Green"></button>
+              <button class="swatch" data-color="#4f9fd0" style="--c:#4f9fd0" title="Blue" aria-label="Blue"></button>
+              <button class="swatch" data-color="#9f6fe8" style="--c:#9f6fe8" title="Purple" aria-label="Purple"></button>
+              <button class="swatch" data-color="#e86fa0" style="--c:#e86fa0" title="Pink" aria-label="Pink"></button>
+              <button class="swatch" data-color="#e8a04f" style="--c:#e8a04f" title="Orange" aria-label="Orange"></button>
+              <button class="swatch" data-color="#e8e04f" style="--c:#e8e04f" title="Yellow" aria-label="Yellow"></button>
+              <input type="color" id="accent-custom" value="#4fd08c" title="Custom colour" aria-label="Custom colour" />
+            </div>
+          </div>
+        </div>
+
+        <!-- CORS Proxy / Credentials -->
+        <div class="settings-section">
+          <h3>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Connection
+          </h3>
+          <p>
+            All Tidal API calls are routed through a CORS proxy because Tidal's API does not allow
+            direct browser requests. The default uses
+            <a href="https://corsproxy.io" target="_blank" rel="noopener">corsproxy.io</a>.
+            Leave empty to attempt direct requests (may fail).
+          </p>
+          <div class="field-group">
+            <label class="field-label" for="proxy-input">Proxy prefix URL</label>
+            <input id="proxy-input" type="url" placeholder="https://corsproxy.io/?url=" autocomplete="off" spellcheck="false" />
+          </div>
+          <hr class="divider" />
+          <p>Override the default Tidal API credentials (optional). Leave blank to use the built-in defaults.</p>
+          <div class="settings-grid">
+            <div class="field-group">
+              <label class="field-label" for="client-id-input">Client ID</label>
+              <input id="client-id-input" type="text" placeholder="(default)" autocomplete="off" spellcheck="false" />
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="client-secret-input">Client Secret</label>
+              <input id="client-secret-input" type="password" placeholder="(default)" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Download -->
+        <div class="settings-section">
+          <h3>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+            Download
+          </h3>
+
+          <div class="settings-grid">
+            <div class="field-group">
+              <label class="field-label" for="setting-track-quality">Default Track Quality</label>
+              <select id="setting-track-quality">
+                <option value="LOW">Low — 96 kbps .m4a</option>
+                <option value="HIGH">High — 320 kbps .m4a</option>
+                <option value="LOSSLESS">Lossless — FLAC 16-bit</option>
+                <option value="HI_RES_LOSSLESS">Max — FLAC up to 24-bit</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="setting-video-quality">Video Quality</label>
+              <select id="setting-video-quality">
+                <option value="sd">SD — 360p</option>
+                <option value="hd">HD — 720p</option>
+                <option value="fhd">Full HD — 1080p</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="setting-threads">Parallel Downloads</label>
+              <input id="setting-threads" type="number" min="1" max="20" value="4" />
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="setting-singles-filter">Singles Filter</label>
+              <select id="setting-singles-filter">
+                <option value="none">None — full albums only</option>
+                <option value="only">Only — singles only</option>
+                <option value="include">Include — albums + singles</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="setting-videos-filter">Videos Filter</label>
+              <select id="setting-videos-filter">
+                <option value="none">None — skip videos</option>
+                <option value="only">Only — videos only</option>
+                <option value="allow">Allow — tracks + videos</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-skip-existing" checked />
+              <span>Skip already-downloaded files</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-update-mtime" />
+              <span>Update modification time of existing files (useful for detecting removed tracks)</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-rewrite-metadata" />
+              <span>Rewrite metadata for already-downloaded files</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- File Path Templates -->
+        <div class="settings-section">
+          <h3>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            File Path Templates
+          </h3>
+          <p>
+            Build custom file path templates for each resource type.
+            Click or drag a token chip into the field, or type freely.
+            Use <code>/</code> to create sub-folders. Changes apply on Save.
+          </p>
+
+          <div class="template-tabs">
+            <button class="template-tab-btn active" data-tab="default">Default</button>
+            <button class="template-tab-btn" data-tab="track">Track</button>
+            <button class="template-tab-btn" data-tab="album">Album</button>
+            <button class="template-tab-btn" data-tab="playlist">Playlist</button>
+            <button class="template-tab-btn" data-tab="mix">Mix</button>
+            <button class="template-tab-btn" data-tab="video">Video</button>
+          </div>
+
+          <!-- Default -->
+          <div class="template-builder active" data-type="default">
+            <div class="template-palette"></div>
+            <div class="template-drop-zone" aria-label="Drop zone"></div>
+            <input class="template-text-input" type="text" placeholder="{album.artist}/{album.title}/{item.title}" spellcheck="false" />
+            <div style="margin-bottom:var(--sp-2)">
+              <button class="btn-ghost template-reset-btn">Reset to default</button>
+            </div>
+            <div class="template-preview-bar">
+              <span class="template-preview-label">Preview:</span>
+              <span class="template-preview-value">—</span>
+            </div>
+          </div>
+
+          <!-- Track -->
+          <div class="template-builder" data-type="track">
+            <div class="template-palette"></div>
+            <div class="template-drop-zone" aria-label="Drop zone"></div>
+            <input class="template-text-input" type="text" placeholder="(uses default if empty)" spellcheck="false" />
+            <div style="margin-bottom:var(--sp-2)">
+              <button class="btn-ghost template-reset-btn">Reset to default</button>
+            </div>
+            <div class="template-preview-bar">
+              <span class="template-preview-label">Preview:</span>
+              <span class="template-preview-value">—</span>
+            </div>
+          </div>
+
+          <!-- Album -->
+          <div class="template-builder" data-type="album">
+            <div class="template-palette"></div>
+            <div class="template-drop-zone" aria-label="Drop zone"></div>
+            <input class="template-text-input" type="text" placeholder="(uses default if empty)" spellcheck="false" />
+            <div style="margin-bottom:var(--sp-2)">
+              <button class="btn-ghost template-reset-btn">Reset to default</button>
+            </div>
+            <div class="template-preview-bar">
+              <span class="template-preview-label">Preview:</span>
+              <span class="template-preview-value">—</span>
+            </div>
+          </div>
+
+          <!-- Playlist -->
+          <div class="template-builder" data-type="playlist">
+            <div class="template-palette"></div>
+            <div class="template-drop-zone" aria-label="Drop zone"></div>
+            <input class="template-text-input" type="text" placeholder="(uses default if empty)" spellcheck="false" />
+            <div style="margin-bottom:var(--sp-2)">
+              <button class="btn-ghost template-reset-btn">Reset to default</button>
+            </div>
+            <div class="template-preview-bar">
+              <span class="template-preview-label">Preview:</span>
+              <span class="template-preview-value">—</span>
+            </div>
+          </div>
+
+          <!-- Mix -->
+          <div class="template-builder" data-type="mix">
+            <div class="template-palette"></div>
+            <div class="template-drop-zone" aria-label="Drop zone"></div>
+            <input class="template-text-input" type="text" placeholder="(uses default if empty)" spellcheck="false" />
+            <div style="margin-bottom:var(--sp-2)">
+              <button class="btn-ghost template-reset-btn">Reset to default</button>
+            </div>
+            <div class="template-preview-bar">
+              <span class="template-preview-label">Preview:</span>
+              <span class="template-preview-value">—</span>
+            </div>
+          </div>
+
+          <!-- Video -->
+          <div class="template-builder" data-type="video">
+            <div class="template-palette"></div>
+            <div class="template-drop-zone" aria-label="Drop zone"></div>
+            <input class="template-text-input" type="text" placeholder="(uses default if empty)" spellcheck="false" />
+            <div style="margin-bottom:var(--sp-2)">
+              <button class="btn-ghost template-reset-btn">Reset to default</button>
+            </div>
+            <div class="template-preview-bar">
+              <span class="template-preview-label">Preview:</span>
+              <span class="template-preview-value">—</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metadata -->
+        <div class="settings-section">
+          <h3>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>
+            Metadata
+          </h3>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-meta-enable" checked />
+              <span>Embed metadata in downloaded files</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-meta-lyrics" />
+              <span>Embed lyrics in metadata</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-meta-cover" />
+              <span>Embed album cover in track file</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-meta-album-review" />
+              <span>Embed album review in COMMENT field (album downloads only)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Cover Art -->
+        <div class="settings-section">
+          <h3>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            Cover Art
+          </h3>
+          <div class="field-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-cover-save" />
+              <span>Save cover art as a separate file</span>
+            </label>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="setting-cover-size">Cover size (px, max 1280)</label>
+            <input id="setting-cover-size" type="number" min="80" max="1280" step="80" value="1280" style="max-width:140px" />
+          </div>
+          <div class="field-group">
+            <label class="field-label">Save cover for</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label"><input type="checkbox" id="setting-cover-allowed-track" /><span>Tracks</span></label>
+              <label class="checkbox-label"><input type="checkbox" id="setting-cover-allowed-album" /><span>Albums</span></label>
+              <label class="checkbox-label"><input type="checkbox" id="setting-cover-allowed-playlist" /><span>Playlists (max 1080px)</span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- M3U -->
+        <div class="settings-section">
+          <h3>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            M3U Playlists
+          </h3>
+          <div class="field-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="setting-m3u-save" />
+              <span>Save M3U playlist files alongside downloads</span>
+            </label>
+          </div>
+          <div class="field-group">
+            <label class="field-label">Generate M3U for</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label"><input type="checkbox" id="setting-m3u-allowed-album" checked /><span>Albums</span></label>
+              <label class="checkbox-label"><input type="checkbox" id="setting-m3u-allowed-mix" checked /><span>Mixes</span></label>
+              <label class="checkbox-label"><input type="checkbox" id="setting-m3u-allowed-playlist" checked /><span>Playlists</span></label>
+            </div>
+          </div>
+        </div>
+
+        <!-- About -->
+        <div class="settings-section">
+          <h3>
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            About
+          </h3>
+          <p>
+            <strong>tiddl-web</strong> is the browser-based front-end for
+            <a href="https://github.com/oskvr37/tiddl" target="_blank" rel="noopener">tiddl</a>,
+            the open-source Tidal downloader.<br /><br />
+            Authentication tokens are stored in your browser's <code>localStorage</code>
+            and never leave your device.<br /><br />
+            For full quality, metadata embedding, and ffmpeg conversion, install
+            <a href="https://github.com/oskvr37/tiddl" target="_blank" rel="noopener">the CLI version</a>.
+          </p>
+        </div>
+
+      </div><!-- /.settings-wrapper -->
+
+      <!-- Sticky save bar -->
+      <div class="settings-save-strip">
+        <button id="btn-save-settings" class="btn-primary">Save settings</button>
+        <span id="settings-save-msg" class="settings-save-msg">✓ Settings saved</span>
       </div>
     </section>
 
@@ -187,7 +501,7 @@
     Account
   </button>
   <button class="tab-btn" data-tab="settings">
-    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
     Settings
   </button>
 </nav>

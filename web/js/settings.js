@@ -1,0 +1,482 @@
+/**
+ * tiddl-web — settings module
+ *
+ * Handles loading/saving all user preferences, theme switching, accent colour
+ * management, and the drag-and-drop file-path template builder.
+ */
+
+import {
+  getCorsProxy, setCorsProxy,
+  getClientId, setClientId,
+  getClientSecret, setClientSecret,
+  getTheme, setTheme,
+  getAccentColor, setAccentColor,
+  getTrackQuality, setTrackQuality,
+  getVideoQuality, setVideoQuality,
+  getThreadsCount, setThreadsCount,
+  getSkipExisting, setSkipExisting,
+  getSinglesFilter, setSinglesFilter,
+  getVideosFilter, setVideosFilter,
+  getUpdateMtime, setUpdateMtime,
+  getRewriteMetadata, setRewriteMetadata,
+  getMetadataEnable, setMetadataEnable,
+  getMetadataLyrics, setMetadataLyrics,
+  getMetadataCover, setMetadataCover,
+  getMetadataAlbumReview, setMetadataAlbumReview,
+  getCoverSave, setCoverSave,
+  getCoverSize, setCoverSize,
+  getCoverAllowed, setCoverAllowed,
+  getM3uSave, setM3uSave,
+  getM3uAllowed, setM3uAllowed,
+  getTemplate, setTemplate,
+  TEMPLATE_DEFAULTS,
+} from "./config.js";
+
+// ─── Accent colour helpers ─────────────────────────────────────────────────
+
+/** Hex → { r, g, b } */
+function hexToRgb(hex) {
+  const m = hex.replace("#", "").match(/.{2}/g);
+  return m ? { r: parseInt(m[0], 16), g: parseInt(m[1], 16), b: parseInt(m[2], 16) } : null;
+}
+
+/** Scale lightness: positive = lighter, negative = darker (rough approach). */
+function adjustHex(hex, amount) {
+  const { r, g, b } = hexToRgb(hex) || { r: 79, g: 208, b: 140 };
+  const clamp = (v) => Math.max(0, Math.min(255, v));
+  const rr = clamp(r + amount).toString(16).padStart(2, "0");
+  const gg = clamp(g + amount).toString(16).padStart(2, "0");
+  const bb = clamp(b + amount).toString(16).padStart(2, "0");
+  return `#${rr}${gg}${bb}`;
+}
+
+/** Apply the chosen accent colour to the CSS custom properties on <html>. */
+export function applyAccentColor(hex) {
+  const root = document.documentElement;
+  root.style.setProperty("--color-accent",       hex);
+  root.style.setProperty("--color-accent-dark",  adjustHex(hex, -30));
+  root.style.setProperty("--color-accent-light", adjustHex(hex,  30));
+  const { r, g, b } = hexToRgb(hex) || { r: 79, g: 208, b: 140 };
+  root.style.setProperty("--color-accent-soft",  `rgba(${r},${g},${b},0.14)`);
+  root.style.setProperty("--color-accent-glow",  `rgba(${r},${g},${b},0.25)`);
+  root.style.setProperty("--color-success",      hex);
+}
+
+// ─── Theme ────────────────────────────────────────────────────────────────────
+
+/** Apply a theme value ("dark" | "light" | "system") to <html>. */
+export function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === "system") {
+    root.removeAttribute("data-theme");
+  } else {
+    root.setAttribute("data-theme", theme);
+  }
+  // Sync the segmented control if it exists
+  document.querySelectorAll(".seg-btn[data-theme-val]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.themeVal === theme);
+  });
+}
+
+// ─── Template token definitions ───────────────────────────────────────────────
+
+const TOKENS = {
+  default: [
+    { label: "item.title",       val: "{item.title}" },
+    { label: "item.artist",      val: "{item.artist}" },
+    { label: "item.number",      val: "{item.number}" },
+    { label: "item.id",          val: "{item.id}" },
+    { label: "album.title",      val: "{album.title}" },
+    { label: "album.artist",     val: "{album.artist}" },
+    { label: "album.date",       val: "{album.date}" },
+    { label: "/",                val: "/", sep: true },
+    { label: " - ",              val: " - ", sep: true },
+    { label: ". ",               val: ". ", sep: true },
+  ],
+  track: [
+    { label: "item.title",       val: "{item.title}" },
+    { label: "item.artist",      val: "{item.artist}" },
+    { label: "item.number",      val: "{item.number:02d}" },
+    { label: "item.volume",      val: "{item.volume}" },
+    { label: "item.id",          val: "{item.id}" },
+    { label: "item.isrc",        val: "{item.isrc}" },
+    { label: "item.quality",     val: "{item.quality}" },
+    { label: "album.title",      val: "{album.title}" },
+    { label: "album.artist",     val: "{album.artist}" },
+    { label: "album.date",       val: "{album.date}" },
+    { label: "/",                val: "/", sep: true },
+    { label: " - ",              val: " - ", sep: true },
+    { label: ". ",               val: ". ", sep: true },
+  ],
+  album: [
+    { label: "item.title",       val: "{item.title}" },
+    { label: "item.artist",      val: "{item.artist}" },
+    { label: "item.number",      val: "{item.number:02d}" },
+    { label: "item.id",          val: "{item.id}" },
+    { label: "album.title",      val: "{album.title}" },
+    { label: "album.artist",     val: "{album.artist}" },
+    { label: "album.date",       val: "{album.date}" },
+    { label: "album.release",    val: "{album.release}" },
+    { label: "/",                val: "/", sep: true },
+    { label: " - ",              val: " - ", sep: true },
+    { label: ". ",               val: ". ", sep: true },
+  ],
+  playlist: [
+    { label: "item.title",       val: "{item.title}" },
+    { label: "item.artist",      val: "{item.artist}" },
+    { label: "item.id",          val: "{item.id}" },
+    { label: "playlist.title",   val: "{playlist.title}" },
+    { label: "playlist.index",   val: "{playlist.index}" },
+    { label: "playlist.created", val: "{playlist.created}" },
+    { label: "album.title",      val: "{album.title}" },
+    { label: "album.artist",     val: "{album.artist}" },
+    { label: "/",                val: "/", sep: true },
+    { label: " - ",              val: " - ", sep: true },
+    { label: ". ",               val: ". ", sep: true },
+  ],
+  mix: [
+    { label: "item.title",       val: "{item.title}" },
+    { label: "item.artist",      val: "{item.artist}" },
+    { label: "item.id",          val: "{item.id}" },
+    { label: "mix_id",           val: "{mix_id}" },
+    { label: "/",                val: "/", sep: true },
+    { label: " - ",              val: " - ", sep: true },
+  ],
+  video: [
+    { label: "item.title",       val: "{item.title}" },
+    { label: "item.artist",      val: "{item.artist}" },
+    { label: "item.id",          val: "{item.id}" },
+    { label: "item.quality",     val: "{item.quality}" },
+    { label: "/",                val: "/", sep: true },
+    { label: " - ",              val: " - ", sep: true },
+  ],
+};
+
+// Preview example values for each token
+const PREVIEW_VALUES = {
+  "{item.title}":       "Harder Better Faster Stronger",
+  "{item.artist}":      "Daft Punk",
+  "{item.artists}":     "Daft Punk",
+  "{item.number}":      "3",
+  "{item.number:02d}":  "03",
+  "{item.volume}":      "1",
+  "{item.id}":          "12345678",
+  "{item.isrc}":        "USQX91501234",
+  "{item.quality}":     "LOSSLESS",
+  "{album.title}":      "Discovery",
+  "{album.artist}":     "Daft Punk",
+  "{album.artists}":    "Daft Punk",
+  "{album.date}":       "2001-03-13",
+  "{album.release}":    "ALBUM",
+  "{playlist.title}":   "My Favorites",
+  "{playlist.index}":   "5",
+  "{playlist.created}": "2024-01-15",
+  "{mix_id}":           "0123456789abcdef",
+};
+
+function renderPreview(template) {
+  if (!template) return "(using default template)";
+  let result = template;
+  for (const [token, val] of Object.entries(PREVIEW_VALUES)) {
+    result = result.replaceAll(token, val);
+  }
+  return result + ".flac";
+}
+
+// ─── Template builder ─────────────────────────────────────────────────────────
+
+/** Build the chip palette HTML for a given type. */
+function buildPaletteHtml(type) {
+  const tokens = TOKENS[type] || TOKENS.default;
+  return tokens.map((t) => {
+    const cls = t.sep ? "token-chip token-chip--sep" : "token-chip";
+    return `<span class="${cls}" draggable="true" data-token="${escAttr(t.val)}" title="Click or drag to insert">${escHtml(t.label)}</span>`;
+  }).join("");
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function escAttr(str) {
+  return String(str).replace(/"/g, "&quot;");
+}
+
+/** Insert text at the cursor position of an <input> or <textarea>. */
+function insertAtCursor(input, text) {
+  const start = input.selectionStart ?? input.value.length;
+  const end   = input.selectionEnd   ?? input.value.length;
+  input.value = input.value.slice(0, start) + text + input.value.slice(end);
+  const pos = start + text.length;
+  input.setSelectionRange(pos, pos);
+  input.focus();
+  input.dispatchEvent(new Event("input"));
+}
+
+/** Initialise one template builder section. */
+function initBuilder(section) {
+  const type      = section.dataset.type;
+  const palette   = section.querySelector(".template-palette");
+  const dropZone  = section.querySelector(".template-drop-zone");
+  const textInput = section.querySelector(".template-text-input");
+  const preview   = section.querySelector(".template-preview-value");
+  const resetBtn  = section.querySelector(".template-reset-btn");
+
+  if (!palette || !dropZone || !textInput || !preview) return;
+
+  // Populate palette
+  palette.innerHTML = buildPaletteHtml(type);
+
+  // Load saved template
+  textInput.value = getTemplate(type);
+
+  const updatePreview = () => {
+    if (preview) preview.textContent = renderPreview(textInput.value);
+  };
+  updatePreview();
+
+  // ── Palette chip click → insert at cursor ──
+  palette.addEventListener("click", (e) => {
+    const chip = e.target.closest(".token-chip");
+    if (!chip) return;
+    insertAtCursor(textInput, chip.dataset.token);
+    updatePreview();
+  });
+
+  // ── Chip drag start ──
+  palette.addEventListener("dragstart", (e) => {
+    const chip = e.target.closest(".token-chip");
+    if (!chip) return;
+    e.dataTransfer.setData("text/plain", chip.dataset.token);
+    e.dataTransfer.effectAllowed = "copy";
+  });
+
+  // ── Drop zone drag-over / drop ──
+  dropZone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    dropZone.classList.add("drag-over");
+  });
+  dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+  dropZone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("drag-over");
+    const token = e.dataTransfer.getData("text/plain");
+    if (token) {
+      insertAtCursor(textInput, token);
+      updatePreview();
+    }
+  });
+
+  // ── Also allow dropping directly on the text input ──
+  textInput.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  textInput.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const token = e.dataTransfer.getData("text/plain");
+    if (!token) return;
+    // Calculate approximate insert position
+    const inputRect = textInput.getBoundingClientRect();
+    const relX = e.clientX - inputRect.left;
+    const charW = (inputRect.width / (textInput.value.length || 1));
+    const pos = Math.min(Math.round(relX / charW), textInput.value.length);
+    textInput.setSelectionRange(pos, pos);
+    insertAtCursor(textInput, token);
+    updatePreview();
+  });
+
+  // ── Live preview ──
+  textInput.addEventListener("input", updatePreview);
+
+  // ── Reset button ──
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      textInput.value = TEMPLATE_DEFAULTS[type] || "";
+      updatePreview();
+    });
+  }
+}
+
+/** Initialise all template builders on the page. */
+export function initTemplateBuilders() {
+  document.querySelectorAll(".template-builder[data-type]").forEach(initBuilder);
+
+  // Template type tab switching
+  document.querySelectorAll(".template-tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.dataset.tab;
+      document.querySelectorAll(".template-tab-btn").forEach((b) =>
+        b.classList.toggle("active", b.dataset.tab === target)
+      );
+      document.querySelectorAll(".template-builder").forEach((s) =>
+        s.classList.toggle("active", s.dataset.type === target)
+      );
+    });
+  });
+}
+
+// ─── Load settings into the form ─────────────────────────────────────────────
+
+function el(id) { return document.getElementById(id); }
+function setVal(id, v)  { const e = el(id); if (e) e.value   = v; }
+function setChk(id, v)  { const e = el(id); if (e) e.checked = v; }
+
+export function loadSettingsForm() {
+  setVal("proxy-input",              getCorsProxy());
+  setVal("client-id-input",          localStorage.getItem("tiddl_client_id")     || "");
+  setVal("client-secret-input",      localStorage.getItem("tiddl_client_secret") || "");
+
+  setVal("setting-track-quality",    getTrackQuality());
+  setVal("setting-video-quality",    getVideoQuality());
+  setVal("setting-threads",          getThreadsCount());
+  setVal("setting-singles-filter",   getSinglesFilter());
+  setVal("setting-videos-filter",    getVideosFilter());
+  setChk("setting-skip-existing",    getSkipExisting());
+  setChk("setting-update-mtime",     getUpdateMtime());
+  setChk("setting-rewrite-metadata", getRewriteMetadata());
+
+  setChk("setting-meta-enable",       getMetadataEnable());
+  setChk("setting-meta-lyrics",       getMetadataLyrics());
+  setChk("setting-meta-cover",        getMetadataCover());
+  setChk("setting-meta-album-review", getMetadataAlbumReview());
+
+  setChk("setting-cover-save",       getCoverSave());
+  setVal("setting-cover-size",       getCoverSize());
+  const allowed = getCoverAllowed();
+  ["track", "album", "playlist"].forEach((t) => {
+    const cb = el(`setting-cover-allowed-${t}`);
+    if (cb) cb.checked = allowed.includes(t);
+  });
+
+  setChk("setting-m3u-save",         getM3uSave());
+  const m3uAllowed = getM3uAllowed();
+  ["album", "mix", "playlist"].forEach((t) => {
+    const cb = el(`setting-m3u-allowed-${t}`);
+    if (cb) cb.checked = m3uAllowed.includes(t);
+  });
+
+  // Theme
+  const theme = getTheme();
+  document.querySelectorAll(".seg-btn[data-theme-val]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.themeVal === theme);
+  });
+
+  // Accent colour
+  const accent = getAccentColor();
+  document.querySelectorAll(".swatch[data-color]").forEach((sw) => {
+    sw.classList.toggle("active", sw.dataset.color.toLowerCase() === accent.toLowerCase());
+  });
+  const custom = el("accent-custom");
+  if (custom) custom.value = accent;
+
+  // Template inputs
+  ["default", "track", "album", "playlist", "mix", "video"].forEach((type) => {
+    const inp = document.querySelector(`.template-builder[data-type="${type}"] .template-text-input`);
+    if (inp) {
+      inp.value = getTemplate(type);
+      const preview = document.querySelector(`.template-builder[data-type="${type}"] .template-preview-value`);
+      if (preview) preview.textContent = renderPreview(inp.value);
+    }
+  });
+}
+
+// ─── Gather settings from the form and save ──────────────────────────────────
+
+function getVal(id)  { const e = el(id); return e ? e.value.trim() : ""; }
+function getChk(id)  { const e = el(id); return e ? e.checked : false; }
+
+export function saveSettingsForm(appendLog) {
+  setCorsProxy(getVal("proxy-input"));
+
+  const cid = getVal("client-id-input");
+  const csec = getVal("client-secret-input");
+  if (cid)  localStorage.setItem("tiddl_client_id",     cid);
+  else       localStorage.removeItem("tiddl_client_id");
+  if (csec) localStorage.setItem("tiddl_client_secret", csec);
+  else       localStorage.removeItem("tiddl_client_secret");
+
+  setTrackQuality(getVal("setting-track-quality"));
+  setVideoQuality(getVal("setting-video-quality"));
+  setThreadsCount(parseInt(getVal("setting-threads") || "4", 10));
+  setSinglesFilter(getVal("setting-singles-filter"));
+  setVideosFilter(getVal("setting-videos-filter"));
+  setSkipExisting(getChk("setting-skip-existing"));
+  setUpdateMtime(getChk("setting-update-mtime"));
+  setRewriteMetadata(getChk("setting-rewrite-metadata"));
+
+  setMetadataEnable(getChk("setting-meta-enable"));
+  setMetadataLyrics(getChk("setting-meta-lyrics"));
+  setMetadataCover(getChk("setting-meta-cover"));
+  setMetadataAlbumReview(getChk("setting-meta-album-review"));
+
+  setCoverSave(getChk("setting-cover-save"));
+  setCoverSize(parseInt(getVal("setting-cover-size") || "1280", 10));
+  setCoverAllowed(["track","album","playlist"].filter((t) => getChk(`setting-cover-allowed-${t}`)));
+
+  setM3uSave(getChk("setting-m3u-save"));
+  setM3uAllowed(["album","mix","playlist"].filter((t) => getChk(`setting-m3u-allowed-${t}`)));
+
+  // Save templates
+  ["default", "track", "album", "playlist", "mix", "video"].forEach((type) => {
+    const inp = document.querySelector(`.template-builder[data-type="${type}"] .template-text-input`);
+    if (inp) setTemplate(type, inp.value.trim());
+  });
+
+  if (typeof appendLog === "function") appendLog("Settings saved.", "success");
+}
+
+// ─── Accent colour UI ─────────────────────────────────────────────────────────
+
+export function initAccentColorUI(appendLog) {
+  document.querySelectorAll(".swatch[data-color]").forEach((sw) => {
+    sw.addEventListener("click", () => {
+      document.querySelectorAll(".swatch[data-color]").forEach((s) => s.classList.remove("active"));
+      sw.classList.add("active");
+      const hex = sw.dataset.color;
+      applyAccentColor(hex);
+      setAccentColor(hex);
+      const custom = el("accent-custom");
+      if (custom) custom.value = hex;
+    });
+  });
+
+  const customInput = el("accent-custom");
+  if (customInput) {
+    customInput.addEventListener("input", () => {
+      const hex = customInput.value;
+      if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+        document.querySelectorAll(".swatch[data-color]").forEach((s) => s.classList.remove("active"));
+        applyAccentColor(hex);
+        setAccentColor(hex);
+      }
+    });
+  }
+}
+
+// ─── Theme toggle ──────────────────────────────────────────────────────────────
+
+export function initThemeUI() {
+  document.querySelectorAll(".seg-btn[data-theme-val]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = btn.dataset.themeVal;
+      setTheme(val);
+      applyTheme(val);
+    });
+  });
+
+  // Header quick-toggle (cycles dark → light → system)
+  const headerToggle = el("theme-toggle");
+  if (headerToggle) {
+    headerToggle.addEventListener("click", () => {
+      const current = getTheme();
+      const next = current === "dark" ? "light" : current === "light" ? "system" : "dark";
+      setTheme(next);
+      applyTheme(next);
+      // Also sync the segmented control
+      document.querySelectorAll(".seg-btn[data-theme-val]").forEach((b) =>
+        b.classList.toggle("active", b.dataset.themeVal === next)
+      );
+    });
+  }
+}

@@ -5,7 +5,7 @@
 > [!WARNING]
 > This app is for personal use only and is not affiliated with Tidal. Users must ensure their use complies with Tidal's terms of service and local copyright laws. Downloaded tracks are for personal use and may not be shared or redistributed. The developer assumes no responsibility for misuse of this app.
 
-**Live app: <https://19jvjeffery.github.io/tiddl-gui/>**
+**Live app: <https://19jvjeffery.github.io/tiddl-gui/web/index.html>**
 
 No installation needed — open the link and go.
 

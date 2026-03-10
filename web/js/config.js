@@ -133,6 +133,30 @@ export function setM3uSave(v)            { setSetting("tiddl_m3u_save", v ? "tru
 export function getM3uAllowed()          { return JSON.parse(getSetting("tiddl_m3u_allowed", '["album","mix","playlist"]')); }
 export function setM3uAllowed(v)         { setSetting("tiddl_m3u_allowed", JSON.stringify(v)); }
 
+// ─── Advanced mode ────────────────────────────────────────────────────────────
+
+export function getAdvancedMode()        { return getSetting("tiddl_advanced_mode", "false") === "true"; }
+export function setAdvancedMode(v)       { setSetting("tiddl_advanced_mode", v ? "true" : "false"); }
+
+// ─── Search history ───────────────────────────────────────────────────────────
+
+const SEARCH_HISTORY_KEY  = "tiddl_search_history";
+const SEARCH_HISTORY_MAX  = 12;
+
+export function loadSearchHistory() {
+  try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || "[]"); }
+  catch { return []; }
+}
+export function saveToSearchHistory(q) {
+  if (!q?.trim()) return;
+  const h = loadSearchHistory().filter(x => x !== q.trim());
+  h.unshift(q.trim());
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(h.slice(0, SEARCH_HISTORY_MAX)));
+}
+export function clearSearchHistory() {
+  localStorage.removeItem(SEARCH_HISTORY_KEY);
+}
+
 // ─── File path templates ──────────────────────────────────────────────────────
 
 const TEMPLATE_DEFAULTS = {

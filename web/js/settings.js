@@ -28,9 +28,45 @@ import {
   getCoverAllowed, setCoverAllowed,
   getM3uSave, setM3uSave,
   getM3uAllowed, setM3uAllowed,
+  getAdvancedMode, setAdvancedMode,
   getTemplate, setTemplate,
   TEMPLATE_DEFAULTS,
 } from "./config.js";
+
+// ─── Browser chrome: dynamic favicon + Safari/Chrome tab colour ──────────────
+
+function _resolveEffectiveTheme() {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "light" || attr === "dark") return attr;
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function _updateBrowserChrome() {
+  const rawAccent = getAccentColor();
+  const isDark    = _resolveEffectiveTheme() === "dark";
+  const bg        = isDark ? "#111120" : "#f2f2fa";
+
+  // Sanitize: only allow valid 3- or 6-digit hex colours before interpolating into SVG
+  const safeAccent = /^#[0-9a-fA-F]{3,6}$/.test(rawAccent) ? rawAccent : "#4fd08c";
+  const safeBg     = /^#[0-9a-fA-F]{3,6}$/.test(bg)        ? bg        : "#111120";
+
+  // SVG favicon: rounded square + bold "t" in accent colour
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="${safeBg}"/><text x="16" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="22" fill="${safeAccent}">t</text></svg>`;
+  const faviconEl = document.getElementById("favicon-link");
+  if (faviconEl) faviconEl.href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+
+  // Safari / Chrome tab bar colour
+  const metaEl = document.getElementById("theme-color-meta");
+  if (metaEl) metaEl.setAttribute("content", safeBg);
+}
+
+/** Call once at startup to install the OS-theme change listener. */
+export function initBrowserChrome() {
+  _updateBrowserChrome();
+  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (!document.documentElement.getAttribute("data-theme")) _updateBrowserChrome();
+  });
+}
 
 // ─── Accent colour helpers ─────────────────────────────────────────────────
 
@@ -60,6 +96,7 @@ export function applyAccentColor(hex) {
   root.style.setProperty("--color-accent-soft",  `rgba(${r},${g},${b},0.14)`);
   root.style.setProperty("--color-accent-glow",  `rgba(${r},${g},${b},0.25)`);
   root.style.setProperty("--color-success",      hex);
+  _updateBrowserChrome();
 }
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -76,6 +113,7 @@ export function applyTheme(theme) {
   document.querySelectorAll(".seg-btn[data-theme-val]").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.themeVal === theme);
   });
+  _updateBrowserChrome();
 }
 
 // ─── Template token definitions ───────────────────────────────────────────────
@@ -336,6 +374,7 @@ export function loadSettingsForm() {
   setChk("setting-skip-existing",    getSkipExisting());
   setChk("setting-update-mtime",     getUpdateMtime());
   setChk("setting-rewrite-metadata", getRewriteMetadata());
+  setChk("setting-advanced-mode",    getAdvancedMode());
 
   setChk("setting-meta-enable",       getMetadataEnable());
   setChk("setting-meta-lyrics",       getMetadataLyrics());
@@ -405,6 +444,7 @@ export function saveSettingsForm(appendLog) {
   setSkipExisting(getChk("setting-skip-existing"));
   setUpdateMtime(getChk("setting-update-mtime"));
   setRewriteMetadata(getChk("setting-rewrite-metadata"));
+  setAdvancedMode(getChk("setting-advanced-mode"));
 
   setMetadataEnable(getChk("setting-meta-enable"));
   setMetadataLyrics(getChk("setting-meta-lyrics"));

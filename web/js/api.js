@@ -55,6 +55,10 @@ export async function getArtistAlbums(id, limit = 50, offset = 0) {
   return apiFetch(`artists/${id}/albums`, { limit, offset, filter: "ALBUMS" });
 }
 
+export async function getArtistSingles(id, limit = 50, offset = 0) {
+  return apiFetch(`artists/${id}/albums`, { limit, offset, filter: "EPSANDSINGLES" });
+}
+
 export async function getPlaylist(uuid) {
   return apiFetch(`playlists/${uuid}`);
 }
@@ -79,6 +83,30 @@ export async function getFavorites() {
   const auth = loadAuth();
   if (!auth?.user_id) throw new Error("No user id");
   return apiFetch(`users/${auth.user_id}/favorites/ids`);
+}
+
+export async function getUserFavoriteTracks(limit = 50, offset = 0) {
+  const auth = loadAuth();
+  if (!auth?.user_id) throw new Error("No user id");
+  return apiFetch(`users/${auth.user_id}/favorites/tracks`, { limit, offset });
+}
+
+export async function getUserFavoriteAlbums(limit = 50, offset = 0) {
+  const auth = loadAuth();
+  if (!auth?.user_id) throw new Error("No user id");
+  return apiFetch(`users/${auth.user_id}/favorites/albums`, { limit, offset });
+}
+
+export async function getUserFavoritePlaylists(limit = 50, offset = 0) {
+  const auth = loadAuth();
+  if (!auth?.user_id) throw new Error("No user id");
+  return apiFetch(`users/${auth.user_id}/favorites/playlists`, { limit, offset });
+}
+
+export async function getUserPlaylists(limit = 50, offset = 0) {
+  const auth = loadAuth();
+  if (!auth?.user_id) throw new Error("No user id");
+  return apiFetch(`users/${auth.user_id}/playlists`, { limit, offset });
 }
 
 export async function getSession() {

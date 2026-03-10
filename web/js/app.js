@@ -37,6 +37,14 @@ const QUALITY_LABELS = {
   LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",
 };
 
+/**
+ * File extensions that are binary formats where reading as UTF-8 text is
+ * unreliable and Tidal URL extraction will likely fail.
+ *  - .doc / .docx / .odt: ZIP-compressed XML — content is not readable as text
+ *  - .pdf: binary object-stream format — text may be partially readable but not guaranteed
+ */
+const BINARY_OFFICE_EXTS = new Set(["doc", "docx", "odt", "pdf"]);
+
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
 function $(id) { return document.getElementById(id); }
@@ -54,6 +62,76 @@ function coverUrl(hash, size = 320) {
   return hash
     ? `https://resources.tidal.com/images/${hash.replace(/-/g, "/")}/${size}x${size}.jpg`
     : "";
+}
+
+/**
+ * Extract candidate Tidal resource tokens from arbitrary file text.
+ *
+ * Strategy:
+ *  1. Strip RTF control sequences so URLs inside .rtf are exposed as plain text.
+ *  2. Find all full Tidal HTTPS URLs via regex — handles JSON values, HTML href
+ *     attributes, YAML strings, XML content, Markdown links, etc.
+ *  3. Find short resource IDs (e.g. "track/103805726") anywhere in the text.
+ *  4. If neither regex found anything (truly plain-text files that may use bare
+ *     numbers or non-URL forms), fall back to per-line parsing — but only accept
+ *     lines that already look like a URL, a short ID, or a bare numeric track ID
+ *     to avoid flooding the activity log with warnings for every non-URL line.
+ *
+ * @param {string} rawText  UTF-8 decoded file content
+ * @param {string} ext      Lowercase file extension without the dot
+ * @returns {string[]}      Deduplicated list of candidate token strings
+ */
+function extractTidalTokens(rawText, ext) {
+  let text = rawText;
+
+  // RTF: strip backslash control words, hex escapes, and braces to expose plain text
+  if (ext === "rtf") {
+    text = text
+      .replace(/\\[a-z*]+-?\d*\s?/gi, " ")  // control words like \rtf1, \fonttbl (allow any whitespace separator)
+      .replace(/\\'[0-9a-f]{2}/gi, "")       // hex character escapes like \'e9
+      .replace(/[{}\\]/g, " ");              // braces and remaining backslashes
+  }
+
+  const tokens = new Set();
+
+  // ── 1. Full Tidal HTTPS URLs ────────────────────────────────────────────────
+  // Matches https://tidal.com/..., https://listen.tidal.com/..., etc.
+  // Exclude braces so JSON object boundaries don't get consumed into the URL.
+  const tidalUrlRe = /https?:\/\/(?:[a-z0-9-]+\.)*tidal\.com\/[^\s"'<>&,;)\]\\{}]+/gi;
+  for (const m of text.matchAll(tidalUrlRe)) {
+    const url = m[0].replace(/[.,;)>\]'"\\}]+$/, "").trim();
+    if (url) tokens.add(url);
+  }
+
+  // ── 2. Short resource IDs ───────────────────────────────────────────────────
+  // Matches track/123, album/abc-uuid, playlist/uuid, mix/id, video/id, artist/id.
+  // Upper bound of 80 chars covers the longest expected Tidal IDs (playlist UUIDs
+  // are 36 chars; using 80 gives headroom without matching unrelated path segments).
+  const shortIdRe = /\b(track|album|playlist|mix|video|artist)\/([a-zA-Z0-9_-]{2,80})\b/gi;
+  for (const m of text.matchAll(shortIdRe)) {
+    tokens.add(`${m[1].toLowerCase()}/${m[2]}`);
+  }
+
+  // ── 3. Line-by-line fallback (plain .txt / .csv / etc.) ─────────────────────
+  // Only runs when neither regex found anything, and only accepts lines that
+  // look like a Tidal URL, a short resource ID, or a bare numeric track ID.
+  // Lines longer than 500 characters are skipped — legitimate Tidal URLs and
+  // resource IDs are always shorter; very long lines indicate non-URL content.
+  if (tokens.size === 0) {
+    for (const raw of text.split(/[\n\r,\t;|]+/)) {
+      const line = raw.trim().replace(/^["'`([\]{}<>]+|["'`)\]}>.,;\\]+$/g, "").trim();
+      if (!line || line.length > 500) continue;
+      if (
+        line.startsWith("http")                                           ||
+        /^(track|album|playlist|mix|video|artist)\//i.test(line)        ||
+        /^\d{4,12}$/.test(line)   // bare numeric track ID
+      ) {
+        tokens.add(line);
+      }
+    }
+  }
+
+  return [...tokens];
 }
 
 // ─── Log ─────────────────────────────────────────────────────────────────────
@@ -553,15 +631,32 @@ function initUrlPillInput() {
   fileInput?.addEventListener("change", () => {
     const file = fileInput.files[0];
     if (!file) return;
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const lines = ev.target.result.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
-      let added = 0;
-      lines.forEach((line) => { if (addUrlPill(line)) added++; });
-      appendLog(`Imported ${added} URL(s) from "${escHtml(file.name)}".`, "info");
+    reader.onerror = () => {
+      appendLog(`Could not read "${escHtml(file.name)}".`, "error");
       fileInput.value = "";
     };
-    reader.readAsText(file);
+    reader.onload = (ev) => {
+      const text = ev.target.result || "";
+      const tokens = extractTidalTokens(text, ext);
+      let added = 0;
+      tokens.forEach((token) => { if (addUrlPill(token)) added++; });
+      if (added > 0) {
+        appendLog(`Imported ${added} URL(s) from "${escHtml(file.name)}".`, "info");
+      } else if (BINARY_OFFICE_EXTS.has(ext)) {
+        appendLog(
+          `No Tidal URLs found in "${escHtml(file.name)}". ` +
+          `.${ext} is a binary format — text extraction may be unreliable. ` +
+          `Try saving the file as plain text (.txt) first and import again.`,
+          "warn"
+        );
+      } else {
+        appendLog(`No Tidal URLs found in "${escHtml(file.name)}".`, "warn");
+      }
+      fileInput.value = "";
+    };
+    reader.readAsText(file, "utf-8");
   });
 }
 

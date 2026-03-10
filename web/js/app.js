@@ -1,7 +1,5 @@
 /**
  * tiddl-web — main application controller
- *
- * Wires together auth, API, download, and settings modules and updates the DOM.
  */
 
 const LOGIN_SUCCESS_REDIRECT_DELAY_MS = 800;
@@ -10,17 +8,34 @@ import {
   getDeviceAuth, pollDeviceAuth, logout,
   isLoggedIn, loadAuth, saveAuth,
 } from "./auth.js";
-import { search } from "./api.js";
+import {
+  search,
+  getArtistAlbums, getArtistSingles,
+  getAlbum, getAlbumItems,
+  getPlaylist, getPlaylistItems,
+  getUserFavoriteTracks, getUserFavoriteAlbums,
+  getUserFavoritePlaylists, getUserPlaylists,
+} from "./api.js";
 import {
   parseTidalInput, downloadTrack, downloadAlbum,
-  downloadPlaylist, downloadMix,
+  downloadPlaylist, downloadMix, downloadArtistAlbums,
 } from "./download.js";
-import { getTheme, getAccentColor, getTrackQuality } from "./config.js";
+import {
+  getTheme, getAccentColor, getTrackQuality, getAdvancedMode,
+  loadSearchHistory, saveToSearchHistory, clearSearchHistory,
+} from "./config.js";
 import {
   applyTheme, applyAccentColor, cycleTheme,
   initThemeUI, initAccentColorUI,
   initTemplateBuilders, loadSettingsForm, saveSettingsForm,
+  initBrowserChrome,
 } from "./settings.js";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const QUALITY_LABELS = {
+  LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",
+};
 
 // ─── Utility ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +50,12 @@ function escHtml(str) {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function coverUrl(hash, size = 320) {
+  return hash
+    ? `https://resources.tidal.com/images/${hash.replace(/-/g, "/")}/${size}x${size}.jpg`
+    : "";
+}
+
 // ─── Log ─────────────────────────────────────────────────────────────────────
 
 function appendLog(msg, type = "info") {
@@ -46,13 +67,14 @@ function appendLog(msg, type = "info") {
   log.appendChild(line);
   log.scrollTop = log.scrollHeight;
 }
-
 function clearLog() {
   const log = $("download-log");
   if (log) log.innerHTML = "";
 }
 
 // ─── Nav ─────────────────────────────────────────────────────────────────────
+
+let _detailOriginTab = "search";
 
 function activateTab(tabId) {
   document.querySelectorAll(".tab-btn").forEach((btn) =>
@@ -61,6 +83,27 @@ function activateTab(tabId) {
   document.querySelectorAll(".tab-panel").forEach((panel) =>
     panel.classList.toggle("hidden", panel.id !== `panel-${tabId}`)
   );
+}
+
+function openDetailPanel(fromTab) {
+  _detailOriginTab = fromTab || "search";
+  // Show detail panel without changing sidebar active state
+  document.querySelectorAll(".tab-panel").forEach((p) =>
+    p.classList.toggle("hidden", p.id !== "panel-detail")
+  );
+  // Keep origin tab highlighted
+  document.querySelectorAll(".tab-btn").forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset.tab === _detailOriginTab)
+  );
+  const lbl = $("btn-detail-back-label");
+  if (lbl) {
+    const names = { search: "Search results", library: "Library" };
+    lbl.textContent = names[_detailOriginTab] || "Back";
+  }
+}
+
+function backFromDetail() {
+  activateTab(_detailOriginTab);
 }
 
 // ─── Auth UI ─────────────────────────────────────────────────────────────────
@@ -87,7 +130,7 @@ async function startLogin() {
   const loginBtn = $("btn-login");
   const loginStatus = $("login-status");
   loginBtn.disabled = true;
-  setHtml(loginStatus, '<span class="spinner"></span> Requesting device code…');
+  setHtml(loginStatus, '<span class="spinner"></span> Requesting device code\u2026');
 
   try {
     const deviceAuth = await getDeviceAuth();
@@ -96,9 +139,7 @@ async function startLogin() {
       `<p>Open the link below and approve the request, then wait here.</p>
        <a href="${escHtml(uri)}" target="_blank" rel="noopener" class="login-link">${escHtml(uri)}</a>`
     );
-
     const endAt = Date.now() + deviceAuth.expiresIn * 1000;
-
     const poll = async () => {
       if (Date.now() >= endAt) {
         setHtml(loginStatus, '<span class="error">Authentication expired. Try again.</span>');
@@ -115,17 +156,21 @@ async function startLogin() {
           country_code: authResponse.user?.countryCode || "US",
           username: authResponse.user?.username || authResponse.user?.email || "User",
         });
-        setHtml(loginStatus, '<span class="success">✓ Logged in successfully!</span>');
+        setHtml(loginStatus, '<span class="success">\u2713 Logged in successfully!</span>');
         loginBtn.disabled = false;
         updateAuthBadge();
-        setTimeout(() => activateTab("download"), LOGIN_SUCCESS_REDIRECT_DELAY_MS);
+        sessionStorage.setItem("tiddl_session_welcome", "1");
+        setTimeout(() => {
+          activateTab("library");
+          loadLibraryIfNeeded();
+        }, LOGIN_SUCCESS_REDIRECT_DELAY_MS);
       } catch (err) {
         if (err?.status === 400 && err?.error === "authorization_pending") {
           const secsLeft = Math.max(0, Math.round((endAt - Date.now()) / 1000));
           const mins = Math.floor(secsLeft / 60);
           const secs = secsLeft % 60;
           setHtml(loginStatus,
-            `<p>Waiting for approval… <span class="countdown">${mins}:${String(secs).padStart(2, "0")}</span></p>
+            `<p>Waiting for approval\u2026 <span class="countdown">${mins}:${String(secs).padStart(2, "0")}</span></p>
              <a href="${escHtml(uri)}" target="_blank" rel="noopener" class="login-link">${escHtml(uri)}</a>`
           );
           pollTimer = setTimeout(poll, deviceAuth.interval * 1000);
@@ -139,7 +184,6 @@ async function startLogin() {
         }
       }
     };
-
     pollTimer = setTimeout(poll, deviceAuth.interval * 1000);
   } catch (err) {
     const msg = err?.message || JSON.stringify(err);
@@ -157,11 +201,36 @@ async function handleLogout() {
   appendLog("Logged out.", "info");
 }
 
-// ─── Download queue ────────────────────────────────────────────────────────
+// ─── Quality ─────────────────────────────────────────────────────────────────
 
-/**
- * Each item: { type, id, title, sub, cover, coverRound }
- */
+function getSelectedQuality() {
+  return $("quality-select")?.value || "HIGH";
+}
+
+function initQualityPicker() {
+  const picker = $("quality-picker");
+  const select = $("quality-select");
+  if (!picker || !select) return;
+
+  const saved = getTrackQuality();
+  select.value = saved;
+  picker.querySelectorAll(".quality-opt").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.q === saved);
+  });
+
+  picker.querySelectorAll(".quality-opt").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const q = btn.dataset.q;
+      select.value = q;
+      picker.querySelectorAll(".quality-opt").forEach((b) =>
+        b.classList.toggle("active", b.dataset.q === q)
+      );
+    });
+  });
+}
+
+// ─── Download queue ───────────────────────────────────────────────────────────
+
 const downloadQueue = [];
 
 function renderQueue() {
@@ -173,44 +242,72 @@ function renderQueue() {
   if (downloadQueue.length === 0) {
     hide(section);
     queueEl.innerHTML = "";
+    updateSearchQueueBanner();
     return;
   }
 
   show(section);
   if (countEl) countEl.textContent = String(downloadQueue.length);
 
+  const advanced = getAdvancedMode();
+
   queueEl.innerHTML = downloadQueue.map((item, idx) => {
     const thumbHtml = item.cover
       ? `<img src="${escHtml(item.cover)}" alt="" class="queue-item-thumb${item.coverRound ? " round" : ""}" loading="lazy" />`
       : `<div class="queue-item-thumb${item.coverRound ? " round" : ""}"></div>`;
-    return `
-      <div class="queue-item" data-idx="${idx}">
-        ${thumbHtml}
-        <div class="queue-item-info">
-          <div class="queue-item-title">${escHtml(item.title)}</div>
-          <div class="queue-item-sub">${escHtml(item.sub)}</div>
-        </div>
-        <span class="queue-item-badge" data-type="${escHtml(item.type)}">${escHtml(item.type)}</span>
-        <span class="queue-item-status" id="queue-status-${idx}"></span>
-        <button class="queue-remove-btn" data-idx="${idx}" title="Remove" aria-label="Remove">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
-      </div>`;
+
+    const q = item.quality || getSelectedQuality();
+    const qualityHtml = advanced
+      ? `<select class="queue-item-quality-sel" data-idx="${idx}" data-quality="${escHtml(q)}" aria-label="Quality for this item">
+           ${["LOW","HIGH","LOSSLESS","HI_RES_LOSSLESS"].map(v =>
+             `<option value="${v}"${v === q ? " selected" : ""}>${escHtml(QUALITY_LABELS[v])}</option>`
+           ).join("")}
+         </select>`
+      : `<span class="quality-pill-sm" data-quality="${escHtml(q)}">${escHtml(QUALITY_LABELS[q] || q)}</span>`;
+
+    return `<div class="queue-item" data-idx="${idx}">
+      ${thumbHtml}
+      <div class="queue-item-info">
+        <div class="queue-item-title">${escHtml(item.title)}</div>
+        <div class="queue-item-sub">${escHtml(item.sub)}</div>
+      </div>
+      <span class="queue-item-badge" data-type="${escHtml(item.type)}">${escHtml(item.type)}</span>
+      ${qualityHtml}
+      <span class="queue-item-status" id="queue-status-${idx}"></span>
+      <button class="queue-remove-btn" data-idx="${idx}" title="Remove" aria-label="Remove">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>`;
   }).join("");
 
   queueEl.querySelectorAll(".queue-remove-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const idx = parseInt(btn.dataset.idx, 10);
-      removeFromQueue(idx);
+      removeFromQueue(parseInt(btn.dataset.idx, 10));
     });
   });
+
+  if (advanced) {
+    queueEl.querySelectorAll(".queue-item-quality-sel").forEach((sel) => {
+      sel.addEventListener("change", () => {
+        const idx = parseInt(sel.dataset.idx, 10);
+        if (downloadQueue[idx]) {
+          downloadQueue[idx].quality = sel.value;
+          sel.dataset.quality = sel.value;
+        }
+      });
+    });
+  }
+
+  updateSearchQueueBanner();
 }
 
 function addToQueue(item) {
-  // Avoid duplicate IDs (same type+id)
-  const exists = downloadQueue.some((q) => q.type === item.type && String(q.id) === String(item.id));
+  const exists = downloadQueue.some(
+    (q) => q.type === item.type && String(q.id) === String(item.id)
+  );
   if (exists) return false;
+  item.quality = item.quality || getSelectedQuality();
   downloadQueue.push(item);
   renderQueue();
   return true;
@@ -220,35 +317,62 @@ function removeFromQueue(idx) {
   const item = downloadQueue[idx];
   downloadQueue.splice(idx, 1);
   renderQueue();
-  // Deselect the corresponding result card
+
   if (item) {
+    // Remove URL pill if it came from URL input
+    if (item.fromUrl) {
+      document.querySelectorAll(`.url-pill[data-type="${item.type}"][data-id="${item.id}"]`)
+        .forEach((p) => p.remove());
+    }
+    // Deselect search result cards
     document.querySelectorAll(`.result-card[data-type="${item.type}"][data-id="${item.id}"]`)
+      .forEach((c) => { c.classList.remove("selected"); c.setAttribute("aria-pressed", "false"); });
+    // Deselect detail track items
+    document.querySelectorAll(`.detail-track-item[data-id="${item.id}"]`)
+      .forEach((c) => c.classList.remove("selected"));
+    // Deselect library track items
+    document.querySelectorAll(`.library-track-item[data-id="${item.id}"]`)
       .forEach((c) => c.classList.remove("selected"));
   }
-  // Also remove the URL input if it matches
-  const urlInput = $("url-input");
-  if (urlInput && downloadQueue.length === 0) urlInput.value = "";
 }
 
 function clearQueue() {
   downloadQueue.length = 0;
-  document.querySelectorAll(".result-card.selected").forEach((c) => c.classList.remove("selected"));
+  document.querySelectorAll(".result-card.selected").forEach((c) => {
+    c.classList.remove("selected"); c.setAttribute("aria-pressed", "false");
+  });
+  document.querySelectorAll(".url-pill").forEach((p) => p.remove());
+  document.querySelectorAll(".detail-track-item.selected,.library-track-item.selected")
+    .forEach((c) => c.classList.remove("selected"));
   renderQueue();
-  const urlInput = $("url-input");
-  if (urlInput) urlInput.value = "";
+}
+
+// ─── Search queue banner ──────────────────────────────────────────────────────
+
+function updateSearchQueueBanner() {
+  const banner = $("search-queue-banner");
+  const txt    = $("search-queue-banner-text");
+  if (!banner) return;
+  const n = downloadQueue.length;
+  if (n > 0) {
+    if (txt) txt.textContent = `${n} item${n === 1 ? "" : "s"} in queue`;
+    show(banner);
+  } else {
+    hide(banner);
+  }
 }
 
 // ─── Progress ─────────────────────────────────────────────────────────────────
 
 function setProgress(done, total, message) {
-  const bar = $("progress-bar");
+  const bar   = $("progress-bar");
   const label = $("progress-label");
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  if (bar) bar.style.width = `${pct}%`;
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+  if (bar)   bar.style.width = `${pct}%`;
   if (label) label.textContent = message || `${pct}%`;
 }
 
-// ─── Download UI ──────────────────────────────────────────────────────────────
+// ─── Download ─────────────────────────────────────────────────────────────────
 
 async function handleDownload() {
   if (!isLoggedIn()) {
@@ -257,41 +381,37 @@ async function handleDownload() {
     return;
   }
 
-  const quality = $("quality-select")?.value || "HIGH";
-  const downloadBtn = $("btn-download");
-
-  // Collect items to download: queue takes priority, fallback to URL input
-  let items = [...downloadQueue];
-  if (items.length === 0) {
-    const raw = $("url-input")?.value?.trim();
-    if (!raw) {
-      appendLog("Please enter a Tidal URL or resource ID, or select items from Search.", "warn");
-      return;
-    }
-    const resource = parseTidalInput(raw);
-    if (!resource) {
-      appendLog(`Could not parse "${raw}" as a Tidal resource.`, "error");
-      return;
-    }
-    items = [{ type: resource.type, id: resource.id, title: raw, sub: "" }];
+  // Flush any half-typed pill input
+  const pilInput = $("url-pill-input");
+  if (pilInput?.value?.trim()) {
+    addUrlPill(pilInput.value.trim());
+    pilInput.value = "";
   }
 
+  const items = [...downloadQueue];
+  if (items.length === 0) {
+    appendLog("Add URLs or select items from Search to build your download queue.", "warn");
+    return;
+  }
+
+  const globalQuality = getSelectedQuality();
+  const advanced      = getAdvancedMode();
+  const downloadBtn   = $("btn-download");
   downloadBtn.disabled = true;
   clearLog();
-  setProgress(0, items.length, "Starting…");
+  setProgress(0, items.length, "Starting\u2026");
 
-  let totalDone = 0;
-  let totalOk = 0, totalFail = 0;
+  let totalDone = 0, totalOk = 0, totalFail = 0;
 
   for (let qi = 0; qi < items.length; qi++) {
-    const item = items[qi];
-    const qStatusEl = $(`queue-status-${qi}`);
-    // Highlight the queue row as "downloading"
+    const item     = items[qi];
+    const quality  = advanced ? (item.quality || globalQuality) : globalQuality;
+    const qStatusEl  = $(`queue-status-${qi}`);
     const queueItemEl = $("download-queue")?.querySelector(`.queue-item[data-idx="${qi}"]`);
     if (queueItemEl) queueItemEl.classList.add("q-downloading");
 
-    appendLog(`Downloading ${item.type}/${item.id} @ ${quality}`, "info");
-    if (qStatusEl) qStatusEl.textContent = "⏳";
+    appendLog(`Downloading ${item.type}/${item.id} @ ${QUALITY_LABELS[quality] || quality}`, "info");
+    if (qStatusEl) qStatusEl.textContent = "\u23f3";
 
     const onProgress = (done, total, msg) => {
       setProgress(qi, items.length, msg || `Item ${qi + 1}/${items.length}`);
@@ -301,66 +421,232 @@ async function handleDownload() {
     try {
       let results = [];
       switch (item.type) {
-        case "track":
-          results = [await downloadTrack(item.id, quality, onProgress)];
-          break;
-        case "album":
-          results = await downloadAlbum(item.id, quality, onProgress);
-          break;
-        case "playlist":
-          results = await downloadPlaylist(item.id, quality, onProgress);
-          break;
-        case "mix":
-          results = await downloadMix(item.id, quality, onProgress);
-          break;
+        case "track":    results = [await downloadTrack(item.id, quality, onProgress)]; break;
+        case "album":    results = await downloadAlbum(item.id, quality, onProgress); break;
+        case "playlist": results = await downloadPlaylist(item.id, quality, onProgress); break;
+        case "mix":      results = await downloadMix(item.id, quality, onProgress); break;
+        case "artist":   results = await downloadArtistAlbums(item.id, quality, onProgress); break;
         default:
-          appendLog(`Resource type "${item.type}" not yet supported.`, "warn");
+          appendLog(`Resource type "${item.type}" not yet supported in the browser.`, "warn");
           results = [{ filename: String(item.id), success: false, error: "unsupported type" }];
       }
-
       for (const r of results) {
-        if (r.success) { appendLog(`✓ Saved: ${r.filename}`, "success"); totalOk++; }
-        else           { appendLog(`✗ Failed: ${r.filename} — ${r.error}`, "error"); totalFail++; }
+        if (r.success) { appendLog(`\u2713 Saved: ${r.filename}`, "success"); totalOk++; }
+        else           { appendLog(`\u2717 Failed: ${r.filename} \u2014 ${r.error}`, "error"); totalFail++; }
       }
       const allOk = results.every((r) => r.success);
-      if (qStatusEl) qStatusEl.textContent = allOk ? "✓" : "✗";
+      if (qStatusEl) qStatusEl.textContent = allOk ? "\u2713" : "\u2717";
       if (queueItemEl) {
         queueItemEl.classList.remove("q-downloading");
         queueItemEl.classList.add(allOk ? "q-done" : "q-failed");
       }
     } catch (err) {
       appendLog(`Error (${item.type}/${item.id}): ${err.message}`, "error");
-      if (qStatusEl) qStatusEl.textContent = "✗";
+      if (qStatusEl) qStatusEl.textContent = "\u2717";
       if (queueItemEl) { queueItemEl.classList.remove("q-downloading"); queueItemEl.classList.add("q-failed"); }
       totalFail++;
     }
-
     totalDone++;
     setProgress(totalDone, items.length, `${totalDone}/${items.length} done`);
   }
 
   setProgress(items.length, items.length,
-    totalFail === 0 ? "Done ✓" : `Done — ${totalOk} ok, ${totalFail} failed`);
+    totalFail === 0 ? "Done \u2713" : `Done \u2014 ${totalOk} ok, ${totalFail} failed`);
   downloadBtn.disabled = false;
+}
+
+// ─── URL pill input ───────────────────────────────────────────────────────────
+
+function addUrlPill(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+
+  const resource = parseTidalInput(trimmed);
+  const isValid  = !!resource;
+  const label    = resource ? `${resource.type}/${resource.id}` : trimmed;
+
+  if (isValid) {
+    const added = addToQueue({
+      type: resource.type, id: resource.id,
+      title: label, sub: trimmed !== label ? trimmed : "",
+      cover: "", coverRound: false, fromUrl: true,
+    });
+    if (!added) return false; // duplicate
+  }
+
+  const pillBox = $("url-pill-box");
+  const input   = $("url-pill-input");
+  const pill    = document.createElement("span");
+  pill.className = `url-pill${isValid ? "" : " invalid"}`;
+  pill.dataset.type = resource?.type || "";
+  pill.dataset.id   = resource?.id   || "";
+  pill.setAttribute("role", "listitem");
+  pill.innerHTML = `<span class="url-pill-label" title="${escHtml(trimmed)}">${escHtml(label)}</span>
+    <button class="url-pill-remove" aria-label="Remove ${escHtml(label)}">
+      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>`;
+
+  pill.querySelector(".url-pill-remove").addEventListener("click", () => {
+    if (isValid && resource) {
+      const idx = downloadQueue.findIndex(
+        (q) => q.type === resource.type && String(q.id) === String(resource.id)
+      );
+      if (idx !== -1) removeFromQueue(idx);
+    }
+    pill.remove();
+  });
+
+  pillBox.insertBefore(pill, input);
+
+  if (!isValid) {
+    appendLog(`Could not parse "${trimmed}" as a Tidal URL.`, "warn");
+  }
+  return isValid;
+}
+
+function initUrlPillInput() {
+  const input   = $("url-pill-input");
+  const pillBox = $("url-pill-box");
+  if (!input || !pillBox) return;
+
+  pillBox.addEventListener("click", (e) => {
+    if (!e.target.closest(".url-pill")) input.focus();
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      const val = input.value.trim();
+      if (val) { addUrlPill(val); input.value = ""; }
+    } else if (e.key === "Backspace" && !input.value) {
+      const pills = pillBox.querySelectorAll(".url-pill");
+      if (pills.length) {
+        const last = pills[pills.length - 1];
+        const type = last.dataset.type;
+        const id   = last.dataset.id;
+        if (type && id) {
+          const idx = downloadQueue.findIndex(
+            (q) => q.type === type && String(q.id) === String(id)
+          );
+          if (idx !== -1) removeFromQueue(idx);
+        }
+        last.remove();
+      }
+    }
+  });
+
+  input.addEventListener("paste", (e) => {
+    const text = (e.clipboardData || window.clipboardData)?.getData("text");
+    if (!text) return;
+    const lines = text.split(/[\n\r,]+/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length > 1) {
+      e.preventDefault();
+      lines.forEach((line) => addUrlPill(line));
+      input.value = "";
+    }
+  });
+
+  // File import
+  const fileInput  = $("url-file-input");
+  const importBtn  = $("btn-import-file");
+  importBtn?.addEventListener("click", () => fileInput?.click());
+  fileInput?.addEventListener("change", () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const lines = ev.target.result.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
+      let added = 0;
+      lines.forEach((line) => { if (addUrlPill(line)) added++; });
+      appendLog(`Imported ${added} URL(s) from "${escHtml(file.name)}".`, "info");
+      fileInput.value = "";
+    };
+    reader.readAsText(file);
+  });
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
 
 let lastSearchData = null;
 let activeTypeFilter = "all";
-
-/** Number of results shown per category before the user clicks "View more". */
 const INITIAL_LIMIT = 8;
 
-function coverUrl(hash, size = 320) {
-  return hash
-    ? `https://resources.tidal.com/images/${hash.replace(/-/g, "/") }/${size}x${size}.jpg`
-    : "";
+function updateSearchClearBtn() {
+  const input = $("search-input");
+  const btn   = $("btn-clear-search");
+  if (!btn || !input) return;
+  btn.classList.toggle("hidden", !input.value);
+}
+
+function showSearchHistory() {
+  const history = loadSearchHistory();
+  const histEl  = $("search-history");
+  const listEl  = $("search-history-list");
+  if (!histEl || !listEl) return;
+  if (!history.length) { hide(histEl); return; }
+
+  listEl.innerHTML = history.map((q) =>
+    `<button class="search-history-item" data-query="${escHtml(q)}">
+       <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+       ${escHtml(q)}
+     </button>`
+  ).join("");
+
+  listEl.querySelectorAll(".search-history-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const input = $("search-input");
+      if (input) input.value = btn.dataset.query;
+      updateSearchClearBtn();
+      hide(histEl);
+      handleSearch();
+    });
+  });
+  show(histEl);
+}
+
+function buildResultCard(resourceType, id, title, sub, cover, round) {
+  const inQueue = downloadQueue.some(
+    (q) => q.type === resourceType && String(q.id) === String(id)
+  );
+  const isTrack = resourceType === "track";
+
+  const imgHtml = cover
+    ? `<img src="${escHtml(cover)}" alt="" class="result-cover${round ? " round" : ""}" loading="lazy" />`
+    : `<div class="result-cover placeholder${round ? " round" : ""}"></div>`;
+
+  const overlayHtml = isTrack
+    ? `<div class="result-card-overlay">
+         <span class="result-card-check">
+           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+         </span>
+       </div>`
+    : `<div class="result-card-overlay">
+         <span class="result-card-nav-icon">
+           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>
+         </span>
+         <button class="card-queue-btn${inQueue ? " in-queue" : ""}" data-quick-add="true" title="Add to queue" aria-label="Add to queue">
+           ${inQueue
+             ? `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`
+             : `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`
+           }
+         </button>
+       </div>`;
+
+  return `<div class="result-card${inQueue ? " selected" : ""}${isTrack ? "" : " result-card--nav"}"
+       data-type="${escHtml(resourceType)}" data-id="${escHtml(String(id))}"
+       data-title="${escHtml(title)}" data-sub="${escHtml(sub)}"
+       data-cover="${escHtml(cover)}" data-round="${round}"
+       tabindex="0" role="button" aria-pressed="${inQueue}">
+    <div class="result-card-img-wrap">${imgHtml}${overlayHtml}</div>
+    <div class="result-info">
+      <span class="result-title">${escHtml(title)}</span>
+      <span class="result-sub">${escHtml(sub)}</span>
+    </div>
+  </div>`;
 }
 
 function buildResultGrid(items, type, shownCount, totalCount) {
   if (!items.length) return "";
-
   const typeLabel = type.charAt(0).toUpperCase() + type.slice(1);
   let html = `<div class="result-section" data-section="${type}">
     <h3 class="result-heading">${typeLabel}</h3>
@@ -368,7 +654,6 @@ function buildResultGrid(items, type, shownCount, totalCount) {
 
   for (const item of items.slice(0, shownCount)) {
     let id, title, sub, cover, round = false;
-
     if (type === "tracks") {
       id = item.id; title = item.title; sub = item.artist?.name || "";
       cover = coverUrl(item.album?.cover);
@@ -382,34 +667,14 @@ function buildResultGrid(items, type, shownCount, totalCount) {
       id = item.uuid; title = item.title; sub = item.creator?.name || "Tidal";
       cover = coverUrl(item.image || item.squareImage);
     }
-
     const resourceType = type === "tracks" ? "track"
       : type === "albums" ? "album"
       : type === "artists" ? "artist"
       : "playlist";
-
-    const inQueue = downloadQueue.some(
-      (q) => q.type === resourceType && String(q.id) === String(id)
-    );
-
-    const imgHtml = cover
-      ? `<img src="${escHtml(cover)}" alt="" class="result-cover${round ? " round" : ""}" loading="lazy" />`
-      : `<div class="result-cover placeholder${round ? " round" : ""}"></div>`;
-
-    html += `
-      <div class="result-card${inQueue ? " selected" : ""}" data-type="${escHtml(resourceType)}" data-id="${escHtml(String(id))}"
-           data-title="${escHtml(title)}" data-sub="${escHtml(sub)}" data-cover="${escHtml(cover)}" data-round="${round}"
-           tabindex="0" role="button" aria-pressed="${inQueue}">
-        ${imgHtml}
-        <div class="result-info">
-          <span class="result-title">${escHtml(title)}</span>
-          <span class="result-sub">${escHtml(sub)}</span>
-        </div>
-      </div>`;
+    html += buildResultCard(resourceType, id, title, sub, cover, round);
   }
 
   html += `</div>`;
-
   if (totalCount > shownCount) {
     html += `<div class="view-more-wrap">
       <button class="btn-view-more" data-type="${type}" data-shown="${shownCount}">
@@ -417,7 +682,6 @@ function buildResultGrid(items, type, shownCount, totalCount) {
       </button>
     </div>`;
   }
-
   html += `</div>`;
   return html;
 }
@@ -437,42 +701,59 @@ function renderSearchResults(data, filter = "all") {
   }
 
   let html = "";
-
-  const show = (type) => filter === "all" || filter === type;
-
-  if (show("tracks"))    html += buildResultGrid(tracks,    "tracks",    INITIAL_LIMIT, tracks.length);
-  if (show("albums"))    html += buildResultGrid(albums,    "albums",    INITIAL_LIMIT, albums.length);
-  if (show("artists"))   html += buildResultGrid(artists,   "artists",   INITIAL_LIMIT, artists.length);
-  if (show("playlists")) html += buildResultGrid(playlists, "playlists", INITIAL_LIMIT, playlists.length);
+  const showType = (t) => filter === "all" || filter === t;
+  if (showType("tracks"))    html += buildResultGrid(tracks,    "tracks",    INITIAL_LIMIT, tracks.length);
+  if (showType("albums"))    html += buildResultGrid(albums,    "albums",    INITIAL_LIMIT, albums.length);
+  if (showType("artists"))   html += buildResultGrid(artists,   "artists",   INITIAL_LIMIT, artists.length);
+  if (showType("playlists")) html += buildResultGrid(playlists, "playlists", INITIAL_LIMIT, playlists.length);
 
   container.innerHTML = html || '<p class="no-results">No results for this category.</p>';
   attachResultHandlers(container);
 }
 
 function attachResultHandlers(container) {
-  // Click on result card: toggle add/remove from queue
   container.querySelectorAll(".result-card").forEach((card) => {
-    card.addEventListener("click", () => toggleResultInQueue(card));
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleResultInQueue(card); }
-    });
+    const isTrack = card.dataset.type === "track";
+    if (isTrack) {
+      card.addEventListener("click", () => toggleResultInQueue(card));
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleResultInQueue(card); }
+      });
+    } else {
+      // Main card click -> detail
+      card.addEventListener("click", (e) => {
+        if (e.target.closest(".card-queue-btn")) return;
+        navigateToDetail(card.dataset.type, card.dataset.id,
+          card.dataset.title, card.dataset.sub, card.dataset.cover, "search");
+      });
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          navigateToDetail(card.dataset.type, card.dataset.id,
+            card.dataset.title, card.dataset.sub, card.dataset.cover, "search");
+        }
+      });
+      // Quick-add button
+      const qaBtn = card.querySelector(".card-queue-btn");
+      if (qaBtn) {
+        qaBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleResultInQueue(card);
+        });
+      }
+    }
   });
 
-  // View more button
   container.querySelectorAll(".btn-view-more").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const type    = btn.dataset.type;
-      const shown   = parseInt(btn.dataset.shown, 10);
-      const items   = lastSearchData?.[type]?.items || [];
+      const type     = btn.dataset.type;
+      const shown    = parseInt(btn.dataset.shown, 10);
+      const items    = lastSearchData?.[type]?.items || [];
       const newShown = shown + INITIAL_LIMIT;
-
-      // Re-render just this section
       const sectionEl = container.querySelector(`.result-section[data-section="${type}"]`);
       if (sectionEl) {
         const tmp = document.createElement("div");
         tmp.innerHTML = buildResultGrid(items, type, newShown, items.length);
-        const newSection = tmp.firstElementChild;
-        sectionEl.replaceWith(newSection);
+        sectionEl.replaceWith(tmp.firstElementChild);
         attachResultHandlers(container);
       }
     });
@@ -492,23 +773,19 @@ function toggleResultInQueue(card) {
   );
 
   if (existing !== -1) {
-    // Remove from queue
     removeFromQueue(existing);
-    card.classList.remove("selected");
-    card.setAttribute("aria-pressed", "false");
-    appendLog(`Removed from queue: ${type}/${id}`, "info");
   } else {
-    // Add to queue and switch to download tab
     addToQueue({ type, id, title, sub, cover, coverRound: round });
     card.classList.add("selected");
     card.setAttribute("aria-pressed", "true");
-    appendLog(`Added to queue: ${type}/${id} — "${title}"`, "info");
-
-    // Prefill URL input with the last-added item (single selection convenience)
-    const urlInput = $("url-input");
-    if (urlInput && downloadQueue.length === 1) urlInput.value = `${type}/${id}`;
-
-    activateTab("download");
+    // Update quick-add button
+    const qaBtn = card.querySelector(".card-queue-btn");
+    if (qaBtn) {
+      qaBtn.classList.add("in-queue");
+      qaBtn.innerHTML = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>`;
+    }
+    appendLog(`Added to queue: ${type}/${id} \u2014 "${title}"`, "info");
+    if (type === "track") activateTab("download");
   }
 }
 
@@ -518,14 +795,16 @@ async function handleSearch() {
     activateTab("auth");
     return;
   }
-
   const query = $("search-input")?.value?.trim();
   if (!query) return;
 
-  const searchBtn = $("btn-search");
+  saveToSearchHistory(query);
+  hide($("search-history"));
+
+  const searchBtn  = $("btn-search");
   searchBtn.disabled = true;
   const container = $("search-results");
-  if (container) container.innerHTML = '<p class="searching"><span class="spinner"></span> Searching…</p>';
+  if (container) container.innerHTML = '<p class="searching"><span class="spinner"></span> Searching\u2026</p>';
 
   try {
     const data = await search(query, 20);
@@ -539,10 +818,357 @@ async function handleSearch() {
   }
 }
 
-// ─── Settings UI ──────────────────────────────────────────────────────────────
+async function showSearchSuggestions() {
+  if (!isLoggedIn()) return;
+  const container = $("search-results");
+  if (!container || container.children.length) return; // already has content
+
+  container.innerHTML = '<p class="searching"><span class="spinner"></span> Loading your library\u2026</p>';
+  try {
+    const [tracksData, albumsData] = await Promise.all([
+      getUserFavoriteTracks(8, 0).catch(() => ({ items: [] })),
+      getUserFavoriteAlbums(8, 0).catch(() => ({ items: [] })),
+    ]);
+    const tracks    = (tracksData.items  || []).map((i) => i.item || i);
+    const albums    = (albumsData.items  || []).map((i) => i.item || i);
+    if (!tracks.length && !albums.length) {
+      container.innerHTML = '<p class="no-results">Search for tracks, albums, artists or playlists above.</p>';
+      return;
+    }
+    let html = '<p class="result-heading" style="margin-top:0">From your library</p>';
+    if (tracks.length) html += buildResultGrid(tracks, "tracks", 8, tracks.length);
+    if (albums.length) html += buildResultGrid(albums, "albums", 8, albums.length);
+    container.innerHTML = html;
+    attachResultHandlers(container);
+  } catch {
+    container.innerHTML = '<p class="no-results">Search for tracks, albums, artists or playlists above.</p>';
+  }
+}
+
+// ─── Detail panel ─────────────────────────────────────────────────────────────
+
+async function navigateToDetail(type, id, title, sub, cover, fromTab) {
+  openDetailPanel(fromTab);
+
+  const header = $("detail-header");
+  const body   = $("detail-body");
+  const round  = type === "artist";
+  const inQueue = downloadQueue.some((q) => q.type === type && String(q.id) === String(id));
+
+  const typeLabel  = { album: "Album", artist: "Artist", playlist: "Playlist", mix: "Mix" }[type] || type;
+  const largerCover = cover.replace(/320x320/, "640x640");
+
+  header.innerHTML = `
+    <div class="detail-cover-wrap">
+      ${largerCover
+        ? `<img src="${escHtml(largerCover)}" alt="" class="detail-cover${round ? " round" : ""}" loading="lazy"/>`
+        : `<div class="detail-cover placeholder${round ? " round" : ""}"></div>`}
+    </div>
+    <div class="detail-header-info">
+      <span class="detail-type-badge">${escHtml(typeLabel)}</span>
+      <h2 class="detail-title">${escHtml(title)}</h2>
+      <p class="detail-sub">${escHtml(sub)}</p>
+      <div class="detail-actions">
+        <button class="btn-primary" id="btn-detail-dl-queue">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add ${escHtml(typeLabel)} to Queue
+        </button>
+      </div>
+    </div>`;
+
+  header.querySelector("#btn-detail-dl-queue")?.addEventListener("click", () => {
+    const added = addToQueue({ type, id, title, sub, cover, coverRound: round });
+    if (added) {
+      appendLog(`Added ${type}/${id} to queue.`, "info");
+      activateTab("download");
+    } else {
+      appendLog(`${type}/${id} is already in the queue.`, "info");
+    }
+  });
+
+  body.innerHTML = '<p class="searching"><span class="spinner"></span> Loading\u2026</p>';
+
+  try {
+    if (type === "artist") {
+      await renderArtistDetail(id, title, body);
+    } else if (type === "album") {
+      await renderAlbumDetail(id, body);
+    } else if (type === "playlist") {
+      await renderPlaylistDetail(id, body);
+    }
+  } catch (err) {
+    body.innerHTML = `<p class="error">Failed to load: ${escHtml(err.message)}</p>`;
+  }
+}
+
+async function renderArtistDetail(artistId, artistName, body) {
+  const [albumsData, singlesData] = await Promise.all([
+    getArtistAlbums(artistId, 20, 0).catch(() => ({ items: [] })),
+    getArtistSingles(artistId, 20, 0).catch(() => ({ items: [] })),
+  ]);
+  const albums  = albumsData.items  || [];
+  const singles = singlesData.items || [];
+
+  function albumGrid(items) {
+    if (!items.length) return "";
+    return `<div class="detail-album-grid">${items.map((album) => {
+      const c = coverUrl(album.cover);
+      return buildResultCard("album", album.id, album.title, album.releaseDate?.slice(0,4) || "", c, false);
+    }).join("")}</div>`;
+  }
+
+  let html = "";
+  if (albums.length)  html += `<p class="detail-section-heading">Albums</p>${albumGrid(albums)}`;
+  if (singles.length) html += `<p class="detail-section-heading">Singles &amp; EPs</p>${albumGrid(singles)}`;
+  if (!html)          html  = `<p class="no-results">No releases found for this artist.</p>`;
+
+  body.innerHTML = html;
+  attachResultHandlers(body);
+}
+
+async function renderAlbumDetail(albumId, body) {
+  const [albumMeta, itemsData] = await Promise.all([
+    getAlbum(albumId),
+    getAlbumItems(albumId, 100, 0),
+  ]);
+  const tracks = (itemsData.items || []).filter((i) => i.type === "track").map((i) => i.item);
+
+  body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
+    const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
+    const coverArt = coverUrl(albumMeta.cover);
+    return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
+        data-title="${escHtml(t.title)}" data-artist="${escHtml(t.artist?.name || "")}"
+        data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
+      <span class="detail-track-num">${i + 1}</span>
+      <div class="detail-track-info">
+        <span class="detail-track-title">${escHtml(t.title)}</span>
+        <span class="detail-track-artist">${escHtml(t.artist?.name || "")}</span>
+      </div>
+      <button class="detail-track-add" title="Add to queue">
+        ${inQ ? "\u2713 Added" : "+ Add"}
+      </button>
+    </div>`;
+  }).join("")}</div>`;
+
+  body.querySelectorAll(".detail-track-item").forEach((row) => {
+    const onClick = () => {
+      const trackId = row.dataset.id;
+      const existing = downloadQueue.findIndex((q) => q.type === "track" && String(q.id) === String(trackId));
+      const btn      = row.querySelector(".detail-track-add");
+      if (existing !== -1) {
+        removeFromQueue(existing);
+        row.classList.remove("selected");
+        if (btn) btn.textContent = "+ Add";
+      } else {
+        const coverArt = coverUrl(albumMeta.cover);
+        addToQueue({ type: "track", id: trackId, title: row.dataset.title,
+          sub: row.dataset.artist, cover: coverArt, coverRound: false });
+        row.classList.add("selected");
+        if (btn) btn.textContent = "\u2713 Added";
+        appendLog(`Added track/${trackId} to queue.`, "info");
+      }
+    };
+    row.addEventListener("click", onClick);
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } });
+  });
+}
+
+async function renderPlaylistDetail(playlistId, body) {
+  const [plMeta, itemsData] = await Promise.all([
+    getPlaylist(playlistId),
+    getPlaylistItems(playlistId, 100, 0),
+  ]);
+  const tracks = (itemsData.items || []).filter((i) => i.type === "track").map((i) => i.item);
+
+  body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
+    const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
+    const coverArt = coverUrl(t.album?.cover);
+    return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
+        data-title="${escHtml(t.title)}" data-artist="${escHtml(t.artist?.name || "")}"
+        data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
+      <span class="detail-track-num">${i + 1}</span>
+      <div class="detail-track-info">
+        <span class="detail-track-title">${escHtml(t.title)}</span>
+        <span class="detail-track-artist">${escHtml(t.artist?.name || "")}</span>
+      </div>
+      <button class="detail-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
+    </div>`;
+  }).join("")}</div>`;
+
+  body.querySelectorAll(".detail-track-item").forEach((row) => {
+    const onClick = () => {
+      const trackId = row.dataset.id;
+      const existing = downloadQueue.findIndex((q) => q.type === "track" && String(q.id) === String(trackId));
+      const btn      = row.querySelector(".detail-track-add");
+      if (existing !== -1) {
+        removeFromQueue(existing);
+        row.classList.remove("selected");
+        if (btn) btn.textContent = "+ Add";
+      } else {
+        addToQueue({ type: "track", id: trackId, title: row.dataset.title,
+          sub: row.dataset.artist, cover: row.dataset.cover, coverRound: false });
+        row.classList.add("selected");
+        if (btn) btn.textContent = "\u2713 Added";
+        appendLog(`Added track/${trackId} to queue.`, "info");
+      }
+    };
+    row.addEventListener("click", onClick);
+    row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } });
+  });
+}
+
+// ─── Library panel ───────────────────────────────────────────────────────────
+
+let _librarySection  = "tracks";
+let _libraryLoaded   = { tracks: false, albums: false, playlists: false };
+let _libraryData     = { tracks: [], albums: [], playlists: [] };
+
+async function loadLibraryIfNeeded() {
+  if (!isLoggedIn()) {
+    $("library-content").innerHTML = '<p class="no-results">Sign in to see your library.</p>';
+    return;
+  }
+
+  // Show welcome message if just logged in
+  if (sessionStorage.getItem("tiddl_session_welcome")) {
+    sessionStorage.removeItem("tiddl_session_welcome");
+    const auth = loadAuth();
+    const welcome = $("library-welcome");
+    const name    = $("library-welcome-name");
+    if (welcome) {
+      if (name) name.textContent = `Welcome, ${auth?.username || "friend"}!`;
+      show(welcome);
+      setTimeout(() => hide(welcome), 5000);
+    }
+  }
+
+  if (!_libraryLoaded[_librarySection]) {
+    renderLibraryContent(null);
+    try {
+      if (_librarySection === "tracks") {
+        const data = await getUserFavoriteTracks(50, 0);
+        _libraryData.tracks = (data.items || []).map((i) => i.item || i);
+      } else if (_librarySection === "albums") {
+        const data = await getUserFavoriteAlbums(50, 0);
+        _libraryData.albums = (data.items || []).map((i) => i.item || i);
+      } else if (_librarySection === "playlists") {
+        const [favData, ownData] = await Promise.all([
+          getUserFavoritePlaylists(50, 0).catch(() => ({ items: [] })),
+          getUserPlaylists(50, 0).catch(() => ({ items: [] })),
+        ]);
+        const favItems = (favData.items || []).map((i) => i.item || i);
+        const ownItems = ownData.items || [];
+        // Deduplicate by uuid
+        const seen = new Set();
+        _libraryData.playlists = [...ownItems, ...favItems].filter((p) => {
+          const key = p.uuid || p.id;
+          if (seen.has(key)) return false;
+          seen.add(key); return true;
+        });
+      }
+      _libraryLoaded[_librarySection] = true;
+      renderLibraryContent(_libraryData[_librarySection]);
+    } catch (err) {
+      const content = $("library-content");
+      if (content) content.innerHTML = `<p class="error">Failed to load library: ${escHtml(err.message)}</p>`;
+    }
+  } else {
+    renderLibraryContent(_libraryData[_librarySection]);
+  }
+}
+
+function renderLibraryContent(items) {
+  const content = $("library-content");
+  if (!content) return;
+
+  if (items === null) {
+    content.innerHTML = '<p class="searching"><span class="spinner"></span> Loading\u2026</p>';
+    return;
+  }
+  if (!items.length) {
+    content.innerHTML = '<p class="no-results">Nothing here yet.</p>';
+    return;
+  }
+
+  if (_librarySection === "tracks") {
+    content.innerHTML = `<div class="library-track-list">${items.map((t) => {
+      const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
+      const cover = coverUrl(t.album?.cover, 80);
+      return `<div class="library-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
+          data-title="${escHtml(t.title)}" data-artist="${escHtml(t.artist?.name || "")}"
+          data-cover="${escHtml(coverUrl(t.album?.cover))}" tabindex="0" role="button">
+        ${cover ? `<img src="${escHtml(cover)}" class="library-track-thumb" alt="" loading="lazy"/>` : `<div class="library-track-thumb"></div>`}
+        <div class="library-track-info">
+          <span class="library-track-title">${escHtml(t.title)}</span>
+          <span class="library-track-artist">${escHtml(t.artist?.name || "")}</span>
+        </div>
+        <button class="library-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
+      </div>`;
+    }).join("")}</div>`;
+
+    content.querySelectorAll(".library-track-item").forEach((row) => {
+      const onClick = () => {
+        const trackId = row.dataset.id;
+        const existing = downloadQueue.findIndex((q) => q.type === "track" && String(q.id) === String(trackId));
+        const btn      = row.querySelector(".library-track-add");
+        if (existing !== -1) {
+          removeFromQueue(existing);
+          row.classList.remove("selected");
+          if (btn) btn.textContent = "+ Add";
+        } else {
+          addToQueue({ type: "track", id: trackId, title: row.dataset.title,
+            sub: row.dataset.artist, cover: row.dataset.cover, coverRound: false });
+          row.classList.add("selected");
+          if (btn) btn.textContent = "\u2713 Added";
+          appendLog(`Added track/${trackId} to queue.`, "info");
+        }
+      };
+      row.addEventListener("click", onClick);
+      row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } });
+    });
+
+  } else {
+    // Albums / playlists: card grid
+    const type = _librarySection === "albums" ? "album" : "playlist";
+    let html = `<div class="result-grid">`;
+    for (const item of items) {
+      const id    = type === "album" ? item.id : (item.uuid || item.id);
+      const title = item.title || item.name || "";
+      const sub   = type === "album" ? (item.artist?.name || "") : (item.creator?.name || "Tidal");
+      const cover = coverUrl(type === "album" ? item.cover : (item.image || item.squareImage));
+      html += buildResultCard(type, id, title, sub, cover, false);
+    }
+    html += `</div>`;
+    content.innerHTML = html;
+    attachLibraryCardHandlers(content);
+  }
+}
+
+function attachLibraryCardHandlers(container) {
+  container.querySelectorAll(".result-card").forEach((card) => {
+    const isTrack = card.dataset.type === "track";
+    if (isTrack) {
+      card.addEventListener("click", () => toggleResultInQueue(card));
+    } else {
+      card.addEventListener("click", (e) => {
+        if (e.target.closest(".card-queue-btn")) return;
+        navigateToDetail(card.dataset.type, card.dataset.id,
+          card.dataset.title, card.dataset.sub, card.dataset.cover, "library");
+      });
+      const qaBtn = card.querySelector(".card-queue-btn");
+      if (qaBtn) qaBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleResultInQueue(card); });
+    }
+  });
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
 
 function handleSaveSettings() {
   saveSettingsForm(appendLog);
+  // Re-render queue in case advanced mode changed
+  renderQueue();
+  // Sync quality picker with saved setting
+  initQualityPicker();
   const msg = $("settings-save-msg");
   if (msg) {
     msg.classList.add("visible");
@@ -557,7 +1183,6 @@ const THEME_ICONS = {
   light:  `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`,
   system: `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`,
 };
-
 function updateThemeIcon() {
   const icon = $("theme-icon");
   if (!icon) return;
@@ -568,22 +1193,31 @@ function updateThemeIcon() {
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
 export function init() {
-  // ── Apply stored appearance preferences immediately ──
+  // Apply stored appearance
   const theme = getTheme();
   applyTheme(theme);
   applyAccentColor(getAccentColor());
   updateThemeIcon();
+  initBrowserChrome();
 
-  // ── Nav tabs ──
+  // Nav tabs
   document.querySelectorAll(".tab-btn").forEach((btn) =>
-    btn.addEventListener("click", () => activateTab(btn.dataset.tab))
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      activateTab(tab);
+      if (tab === "library") loadLibraryIfNeeded();
+      if (tab === "search" && !lastSearchData && isLoggedIn()) showSearchSuggestions();
+    })
   );
 
-  // ── Auth ──
+  // Detail back button
+  $("btn-detail-back")?.addEventListener("click", backFromDetail);
+
+  // Auth
   $("btn-login")?.addEventListener("click", startLogin);
   $("btn-logout")?.addEventListener("click", handleLogout);
 
-  // ── Log toggle ──
+  // Log toggle
   $("btn-toggle-log")?.addEventListener("click", () => {
     const log = $("download-log");
     const btn = $("btn-toggle-log");
@@ -592,48 +1226,81 @@ export function init() {
     btn.textContent = collapsed ? "Show log" : "Hide log";
   });
 
-  // ── Download ──
+  // Download
   $("btn-download")?.addEventListener("click", handleDownload);
-  $("url-input")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") handleDownload();
-  });
   $("btn-clear-queue")?.addEventListener("click", clearQueue);
 
-  // ── Search ──
-  $("btn-search")?.addEventListener("click", handleSearch);
-  $("search-input")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") handleSearch();
-  });
+  // URL pill input + file import
+  initUrlPillInput();
 
-  // Type filter pills
+  // Quality picker
+  initQualityPicker();
+
+  // Search
+  $("btn-search")?.addEventListener("click", handleSearch);
+  const searchInput = $("search-input");
+  searchInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") handleSearch(); });
+  searchInput?.addEventListener("input", () => {
+    updateSearchClearBtn();
+    const container = $("search-results");
+    if (!searchInput.value && container && lastSearchData) {
+      lastSearchData = null;
+      container.innerHTML = "";
+      if (isLoggedIn()) showSearchSuggestions();
+    }
+  });
+  searchInput?.addEventListener("focus", () => showSearchHistory());
+  searchInput?.addEventListener("blur", () => setTimeout(() => hide($("search-history")), 150));
+
+  $("btn-clear-search")?.addEventListener("click", () => {
+    if (searchInput) searchInput.value = "";
+    updateSearchClearBtn();
+    const container = $("search-results");
+    if (container) container.innerHTML = "";
+    lastSearchData = null;
+    hide($("search-history"));
+    if (isLoggedIn()) showSearchSuggestions();
+  });
+  $("btn-clear-history")?.addEventListener("click", () => {
+    clearSearchHistory();
+    hide($("search-history"));
+  });
+  $("btn-go-downloads")?.addEventListener("click", () => activateTab("download"));
+
+  // Search type pills
   document.querySelectorAll(".type-pill").forEach((pill) => {
+    if (!pill.closest("#search-type-pills")) return;
     pill.addEventListener("click", () => {
       activeTypeFilter = pill.dataset.type;
-      document.querySelectorAll(".type-pill").forEach((p) =>
+      document.querySelectorAll("#search-type-pills .type-pill").forEach((p) =>
         p.classList.toggle("active", p.dataset.type === activeTypeFilter)
       );
       if (lastSearchData) renderSearchResults(lastSearchData, activeTypeFilter);
     });
   });
 
-  // ── Settings ──
+  // Library section pills
+  document.querySelectorAll("#library-section-pills .type-pill").forEach((pill) => {
+    pill.addEventListener("click", () => {
+      _librarySection = pill.dataset.section;
+      document.querySelectorAll("#library-section-pills .type-pill").forEach((p) =>
+        p.classList.toggle("active", p.dataset.section === _librarySection)
+      );
+      loadLibraryIfNeeded();
+    });
+  });
+
+  // Settings
   $("btn-save-settings")?.addEventListener("click", handleSaveSettings);
 
-  // Theme toggle in header (cycles dark → light → system)
-  $("theme-toggle")?.addEventListener("click", () => {
-    cycleTheme();
-    updateThemeIcon();
-  });
+  // Theme toggle
+  $("theme-toggle")?.addEventListener("click", () => { cycleTheme(); updateThemeIcon(); });
 
   initThemeUI();
   initAccentColorUI(appendLog);
   initTemplateBuilders();
 
-  // ── Quality sync: default select value from settings ──
-  const qs = $("quality-select");
-  if (qs) qs.value = getTrackQuality();
-
-  // ── Initial state ──
+  // Initial state
   updateAuthBadge();
   loadSettingsForm();
 
@@ -641,5 +1308,7 @@ export function init() {
     activateTab("auth");
   } else {
     activateTab("download");
+    // Preload search suggestions in background
+    showSearchSuggestions();
   }
 }

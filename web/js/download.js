@@ -7,7 +7,7 @@
  */
 
 import { proxied } from "./config.js";
-import { getTrackStream, getVideoStream, getTrack, getAlbum, getAlbumItems, getPlaylist, getPlaylistItems, getMixItems } from "./api.js";
+import { getTrackStream, getVideoStream, getTrack, getAlbum, getAlbumItems, getPlaylist, getPlaylistItems, getMixItems, getArtistAlbums, getArtistSingles } from "./api.js";
 
 /** Delay (ms) before revoking an object URL after triggering a download. */
 const BLOB_URL_REVOKE_DELAY_MS = 1000;
@@ -176,7 +176,29 @@ function sanitize(name) {
   return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").trim().slice(0, MAX_FILENAME_LENGTH);
 }
 
-// ─── Minimal ZIP builder (STORE / no compression) ────────────────────────
+// ─── ZIP timestamp helpers ─────────────────────────────────────────────────
+
+/**
+ * Encode the current local date/time as MS-DOS date and time words.
+ * ZIP local/central-directory headers use this format.
+ *   Date word: bits 15-9 = year-1980, bits 8-5 = month (1-12), bits 4-0 = day
+ *   Time word: bits 15-11 = hours, bits 10-5 = minutes, bits 4-0 = secs/2
+ * Zeroing these fields produces "December 31 1979" on macOS — avoid that.
+ */
+function dosNow() {
+  const d = new Date();
+  const date =
+    (((d.getFullYear() - 1980) & 0x7F) << 9) |
+    (((d.getMonth() + 1)       & 0x0F) << 5) |
+    ( d.getDate()              & 0x1F);
+  const time =
+    ((d.getHours()                  & 0x1F) << 11) |
+    ((d.getMinutes()                & 0x3F) <<  5) |
+    ((Math.floor(d.getSeconds() / 2) & 0x1F));
+  return { date, time };
+}
+
+
 
 /**
  * Compute CRC-32 of a Uint8Array (ISO 3309 polynomial).
@@ -214,6 +236,7 @@ function buildZip(files) {
     const nameBytes = enc.encode(name);
     const checksum = crc32(data);
     const size = data.byteLength;
+    const { date: dosDate, time: dosTime } = dosNow();
 
     // ── Local file header (30 bytes + file name) ──
     const lhBuf = new ArrayBuffer(30 + nameBytes.length);
@@ -222,8 +245,8 @@ function buildZip(files) {
     lh.setUint16( 4, 20, true);          // version needed (2.0)
     lh.setUint16( 6, 0x0800, true);      // general-purpose flags: UTF-8 name
     lh.setUint16( 8, 0, true);           // compression method: STORE
-    lh.setUint16(10, 0, true);           // last mod time
-    lh.setUint16(12, 0, true);           // last mod date
+    lh.setUint16(10, dosTime, true);     // last mod time
+    lh.setUint16(12, dosDate, true);     // last mod date
     lh.setUint32(14, checksum, true);    // CRC-32
     lh.setUint32(18, size, true);        // compressed size
     lh.setUint32(22, size, true);        // uncompressed size
@@ -241,8 +264,8 @@ function buildZip(files) {
     cdh.setUint16( 6, 20, true);          // version needed
     cdh.setUint16( 8, 0x0800, true);      // general-purpose flags: UTF-8
     cdh.setUint16(10, 0, true);           // compression: STORE
-    cdh.setUint16(12, 0, true);           // last mod time
-    cdh.setUint16(14, 0, true);           // last mod date
+    cdh.setUint16(12, dosTime, true);     // last mod time
+    cdh.setUint16(14, dosDate, true);     // last mod date
     cdh.setUint32(16, checksum, true);    // CRC-32
     cdh.setUint32(20, size, true);        // compressed size
     cdh.setUint32(24, size, true);        // uncompressed size
@@ -506,4 +529,41 @@ export function parseTidalInput(input) {
   }
 
   return null;
+}
+
+/**
+ * Download every album (plus singles/EPs) by an artist.
+ * Each album is packaged as its own ZIP file, downloaded in sequence.
+ * Returns an array of per-album result arrays.
+ */
+export async function downloadArtistAlbums(artistId, quality = "HIGH", onProgress) {
+  try {
+    onProgress?.(0, 1, "Fetching artist discography…");
+    const [albumsData, singlesData] = await Promise.all([
+      getArtistAlbums(artistId, 50, 0).catch(() => ({ items: [] })),
+      getArtistSingles(artistId, 50, 0).catch(() => ({ items: [] })),
+    ]);
+
+    const all = [
+      ...(albumsData.items || []),
+      ...(singlesData.items || []),
+    ];
+
+    if (all.length === 0) {
+      return [{ filename: `artist-${artistId}`, success: false, error: "No albums found." }];
+    }
+
+    const allResults = [];
+    for (let i = 0; i < all.length; i++) {
+      const album = all[i];
+      onProgress?.(i, all.length, `Album ${i + 1}/${all.length}: ${album.title}`);
+      const res = await downloadAlbum(album.id, quality, (d, t, msg) =>
+        onProgress?.(i, all.length, `Album ${i + 1}/${all.length}: ${msg || ""}`)
+      );
+      allResults.push(...(Array.isArray(res) ? res : [res]));
+    }
+    return allResults;
+  } catch (err) {
+    return [{ filename: `artist-${artistId}`, success: false, error: `Failed to download artist ${artistId}: ${err.message}` }];
+  }
 }

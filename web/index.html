@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>tiddl — Tidal Downloader</title>
+  <meta name="description" content="Download Tidal tracks, albums and playlists — now in your browser." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ─── Header ────────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">tiddl <span>♫ tidal downloader</span></div>
+  <div class="header-spacer"></div>
+  <span id="auth-badge" class="auth-badge auth-badge--out">Not logged in</span>
+  <button id="btn-logout" class="btn-logout hidden">Logout</button>
+</header>
+
+<div class="layout">
+
+  <!-- ─── Sidebar ─────────────────────────────────────────────────────── -->
+  <nav class="sidebar">
+    <button class="tab-btn" data-tab="download">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+      Download
+    </button>
+    <button class="tab-btn" data-tab="search">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      Search
+    </button>
+    <button class="tab-btn" data-tab="auth">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Account
+    </button>
+    <button class="tab-btn" data-tab="settings">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Settings
+    </button>
+  </nav>
+
+  <!-- ─── Main ─────────────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- ── Download panel ──────────────────────────────────────────────── -->
+    <section id="panel-download" class="tab-panel hidden">
+      <h2 class="panel-title">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+        Download
+      </h2>
+
+      <div class="download-row">
+        <div class="input-group">
+          <label for="url-input">Tidal URL or ID</label>
+          <input
+            id="url-input"
+            type="text"
+            placeholder="https://tidal.com/browse/track/… or track/12345678"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <div class="input-group quality-select-wrap">
+          <label for="quality-select">Quality</label>
+          <select id="quality-select">
+            <option value="LOW">Low (96 kbps)</option>
+            <option value="HIGH" selected>High (320 kbps)</option>
+            <option value="LOSSLESS">Lossless (FLAC 16-bit)</option>
+            <option value="HI_RES_LOSSLESS">Max (FLAC up to 24-bit)</option>
+          </select>
+        </div>
+        <button id="btn-download" class="btn-primary">Download</button>
+      </div>
+
+      <div class="progress-section">
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-fill"></div>
+        </div>
+        <div id="progress-label" class="progress-label">Idle</div>
+      </div>
+
+      <div id="download-log" class="log-box" aria-label="Download log" role="log" aria-live="polite"></div>
+
+      <p style="margin-top:0.75rem; font-size:0.82rem; color:var(--text-muted);">
+        Supported inputs: full Tidal URLs, or short-form IDs like
+        <code>track/103805726</code>, <code>album/103805723</code>, <code>playlist/uuid</code>.
+        <br>
+        <strong>Note:</strong> Downloads require a CORS proxy. Configure one in Settings if needed.
+        Encrypted streams cannot be saved in the browser.
+      </p>
+    </section>
+
+    <!-- ── Search panel ────────────────────────────────────────────────── -->
+    <section id="panel-search" class="tab-panel hidden">
+      <h2 class="panel-title">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        Search
+      </h2>
+
+      <div class="search-row">
+        <input id="search-input" type="text" placeholder="Artist, track, album…" autocomplete="off" />
+        <button id="btn-search" class="btn-primary">Search</button>
+      </div>
+
+      <div id="search-results"></div>
+    </section>
+
+    <!-- ── Auth panel ──────────────────────────────────────────────────── -->
+    <section id="panel-auth" class="tab-panel hidden">
+      <h2 class="panel-title">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Account
+      </h2>
+
+      <div class="auth-card">
+        <p>
+          Sign in with your Tidal account using the secure device-code flow.
+          You will be redirected to Tidal's login page in a new tab — no password is
+          ever entered here.
+        </p>
+        <button id="btn-login" class="btn-login-big">Login with Tidal</button>
+        <div id="login-status"></div>
+      </div>
+    </section>
+
+    <!-- ── Settings panel ──────────────────────────────────────────────── -->
+    <section id="panel-settings" class="tab-panel hidden">
+      <h2 class="panel-title">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+        Settings
+      </h2>
+
+      <div class="settings-section">
+        <h3>CORS Proxy</h3>
+        <p>
+          Tidal's API does not allow direct browser requests from external origins.
+          A CORS proxy forwards your requests to Tidal and adds the necessary headers.
+          The default uses <a href="https://corsproxy.io" target="_blank" rel="noopener">corsproxy.io</a>.
+          Leave empty to attempt direct requests (may fail).
+        </p>
+        <label class="field-label" for="proxy-input">Proxy prefix URL</label>
+        <input
+          id="proxy-input"
+          type="url"
+          placeholder="https://corsproxy.io/?url="
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button id="btn-save-settings" class="btn-secondary">Save settings</button>
+      </div>
+
+      <div class="settings-section">
+        <h3>About</h3>
+        <p>
+          <strong>tiddl-web</strong> is the browser-based front-end for
+          <a href="https://github.com/oskvr37/tiddl" target="_blank" rel="noopener">tiddl</a>,
+          the open-source Tidal downloader.<br/><br/>
+          Authentication tokens are stored in your browser's <code>localStorage</code>
+          and never leave your device.<br/><br/>
+          For best results, install <a href="https://github.com/oskvr37/tiddl" target="_blank" rel="noopener">the CLI version</a>
+          which supports full quality, metadata, and format conversion via ffmpeg.
+        </p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ─── Mobile bottom nav ────────────────────────────────────────────────── -->
+<nav class="mobile-nav">
+  <button class="tab-btn" data-tab="download">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+    Download
+  </button>
+  <button class="tab-btn" data-tab="search">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    Search
+  </button>
+  <button class="tab-btn" data-tab="auth">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    Account
+  </button>
+  <button class="tab-btn" data-tab="settings">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+    Settings
+  </button>
+</nav>
+
+<script type="module">
+  import { init } from './js/app.js';
+  window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

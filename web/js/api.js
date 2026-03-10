@@ -55,6 +55,10 @@ export async function getArtistAlbums(id, limit = 50, offset = 0) {
   return apiFetch(`artists/${id}/albums`, { limit, offset, filter: "ALBUMS" });
 }
 
+export async function getArtistSingles(id, limit = 50, offset = 0) {
+  return apiFetch(`artists/${id}/albums`, { limit, offset, filter: "EPSANDSINGLES" });
+}
+
 export async function getPlaylist(uuid) {
   return apiFetch(`playlists/${uuid}`);
 }

@@ -235,7 +235,7 @@ header {
 }
 
 .logo {
-  font-size: 1.3rem; font-weight: 800; letter-spacing: -0.5px;
+  font-size: 1.2rem; font-weight: 800; letter-spacing: -0.5px;
   color: var(--color-accent); white-space: nowrap;
 }
 .logo span { color: var(--color-text-muted); font-weight: 400; font-size: 0.82rem; margin-left: 5px; }

@@ -60,10 +60,13 @@
 
     <!-- Download panel -->
     <section id="panel-download" class="tab-panel hidden">
-      <h2 class="panel-title">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
-        Download
-      </h2>
+      <div class="panel-sticky-header">
+        <h2 class="panel-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+          Download
+        </h2>
+      </div>
+      <div class="panel-scroll-body">
 
       <div class="dl-url-section">
         <label class="field-label" for="url-pill-input">Tidal URLs / resource IDs</label>
@@ -147,138 +150,155 @@
         Type or paste Tidal URLs / short IDs (e.g. <code>track/103805726</code>, <code>album/103805723</code>) and press <kbd>Enter</kbd> to add to queue.
         Paste multiple URLs at once or use <strong>Import file</strong> for a text file. Encrypted streams cannot be saved in the browser.
       </p>
+      </div><!-- .panel-scroll-body -->
     </section>
-
-    <!-- Search panel -->
     <section id="panel-search" class="tab-panel hidden">
-      <h2 class="panel-title">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        Search
-      </h2>
+      <div class="panel-sticky-header">
+        <h2 class="panel-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Search
+        </h2>
 
-      <div class="search-queue-banner hidden" id="search-queue-banner">
-        <span id="search-queue-banner-text">0 items in queue</span>
-        <button id="btn-go-downloads" class="btn-go-downloads">
-          Go to Downloads
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>
-        </button>
-      </div>
-
-      <div class="search-row">
-        <div class="search-input-wrap">
-          <input id="search-input" type="text" placeholder="Artist, track, album, playlist&#x2026;" autocomplete="off" />
-          <button id="btn-clear-search" class="btn-clear-search hidden" aria-label="Clear search">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        <div class="search-queue-banner hidden" id="search-queue-banner">
+          <span id="search-queue-banner-text">0 items in queue</span>
+          <button id="btn-go-downloads" class="btn-go-downloads">
+            Go to Downloads
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>
           </button>
         </div>
-        <button id="btn-search" class="btn-primary">Search</button>
-      </div>
 
-      <div class="search-history hidden" id="search-history">
-        <div class="search-history-header">
-          <span class="search-history-label">
-            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Recent searches
-          </span>
-          <button id="btn-clear-history" class="btn-ghost" style="font-size:0.72rem;padding:0.15rem 0.55rem">Clear</button>
+        <div class="search-row">
+          <div class="search-input-wrap">
+            <input id="search-input" type="text" placeholder="Artist, track, album, playlist&#x2026;" autocomplete="off" />
+            <button id="btn-clear-search" class="btn-clear-search hidden" aria-label="Clear search">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <button id="btn-search" class="btn-primary">Search</button>
         </div>
-        <div id="search-history-list"></div>
-      </div>
 
-      <div class="search-type-pills" id="search-type-pills">
-        <button class="type-pill active" data-type="all">All</button>
-        <button class="type-pill" data-type="tracks">Tracks</button>
-        <button class="type-pill" data-type="albums">Albums</button>
-        <button class="type-pill" data-type="artists">Artists</button>
-        <button class="type-pill" data-type="playlists">Playlists</button>
-      </div>
+        <div class="search-history hidden" id="search-history">
+          <div class="search-history-header">
+            <span class="search-history-label">
+              <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent searches
+            </span>
+            <button id="btn-clear-history" class="btn-ghost" style="font-size:0.72rem;padding:0.15rem 0.55rem">Clear</button>
+          </div>
+          <div id="search-history-list"></div>
+        </div>
 
-      <div id="search-results"></div>
+        <div class="search-type-pills" id="search-type-pills">
+          <button class="type-pill active" data-type="all">All</button>
+          <button class="type-pill" data-type="tracks">Tracks</button>
+          <button class="type-pill" data-type="albums">Albums</button>
+          <button class="type-pill" data-type="artists">Artists</button>
+          <button class="type-pill" data-type="playlists">Playlists</button>
+        </div>
+      </div><!-- .panel-sticky-header -->
+
+      <div class="panel-scroll-body">
+        <div id="search-results"></div>
+      </div><!-- .panel-scroll-body -->
     </section>
 
     <!-- Library panel -->
     <section id="panel-library" class="tab-panel hidden">
-      <div id="library-welcome" class="library-welcome hidden">
-        <div class="library-welcome-inner">
-          <span class="library-welcome-emoji">&#x1F44B;</span>
-          <div>
-            <strong id="library-welcome-name">Welcome!</strong>
-            <span class="library-welcome-sub">Your library is loading&hellip;</span>
+      <div class="panel-sticky-header">
+        <div id="library-welcome" class="library-welcome hidden">
+          <div class="library-welcome-inner">
+            <span class="library-welcome-emoji">&#x1F44B;</span>
+            <div>
+              <strong id="library-welcome-name">Welcome!</strong>
+              <span class="library-welcome-sub">Your library is loading&hellip;</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <h2 class="panel-title">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="4" height="18"/><rect x="9" y="3" width="4" height="18"/><path d="M16 3l5 2v14l-5 2V3z"/></svg>
-        Library
-      </h2>
+        <h2 class="panel-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="4" height="18"/><rect x="9" y="3" width="4" height="18"/><path d="M16 3l5 2v14l-5 2V3z"/></svg>
+          Library
+        </h2>
 
-      <div class="search-type-pills" id="library-section-pills" style="margin-bottom:var(--sp-4)">
-        <button class="type-pill active" data-section="tracks">Tracks</button>
-        <button class="type-pill" data-section="albums">Albums</button>
-        <button class="type-pill" data-section="playlists">Playlists</button>
-      </div>
+        <div class="search-type-pills" id="library-section-pills" style="margin-bottom:var(--sp-4)">
+          <button class="type-pill active" data-section="tracks">Tracks</button>
+          <button class="type-pill" data-section="albums">Albums</button>
+          <button class="type-pill" data-section="playlists">Playlists</button>
+        </div>
+      </div><!-- .panel-sticky-header -->
 
-      <div id="library-content"><p class="no-results">Sign in to see your library.</p></div>
+      <div class="panel-scroll-body">
+        <div id="library-content"><p class="no-results">Sign in to see your library.</p></div>
+      </div><!-- .panel-scroll-body -->
     </section>
 
     <!-- Detail panel -->
     <section id="panel-detail" class="tab-panel hidden">
-      <div class="detail-topbar">
-        <button id="btn-detail-back" class="btn-detail-back">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
-          <span id="btn-detail-back-label">Back</span>
-        </button>
-      </div>
-      <div id="detail-header" class="detail-header"></div>
-      <div id="detail-body"   class="detail-body"></div>
+      <div class="panel-sticky-header">
+        <div class="detail-topbar">
+          <button id="btn-detail-back" class="btn-detail-back">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+            <span id="btn-detail-back-label">Back</span>
+          </button>
+        </div>
+        <div id="detail-header" class="detail-header"></div>
+      </div><!-- .panel-sticky-header -->
+
+      <div class="panel-scroll-body">
+        <div id="detail-body" class="detail-body"></div>
+      </div><!-- .panel-scroll-body -->
     </section>
 
     <!-- Auth panel -->
     <section id="panel-auth" class="tab-panel hidden">
-      <div class="auth-page">
-        <div class="auth-hero">
-          <div class="auth-hero-icon">
-            <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      <div class="panel-scroll-body">
+        <div class="auth-page">
+          <div class="auth-hero">
+            <div class="auth-hero-icon">
+              <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </div>
+            <h1 class="auth-hero-title">tiddl</h1>
+            <p class="auth-hero-sub">Your Tidal music library, downloaded at maximum quality.</p>
           </div>
-          <h1 class="auth-hero-title">tiddl</h1>
-          <p class="auth-hero-sub">Your Tidal music library, downloaded at maximum quality.</p>
-        </div>
 
-        <div class="auth-card">
-          <h2 class="auth-card-heading">Sign in with Tidal</h2>
-          <p>Use the secure device-code flow &mdash; no password is entered here. Approve the request in a new tab, then return.</p>
-          <button id="btn-login" class="btn-login-big">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
-            Login with Tidal
-          </button>
-          <div id="login-status"></div>
-        </div>
+          <div class="auth-card">
+            <h2 class="auth-card-heading">Sign in with Tidal</h2>
+            <p>Use the secure device-code flow &mdash; no password is entered here. Approve the request in a new tab, then return.</p>
+            <button id="btn-login" class="btn-login-big">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+              Login with Tidal
+            </button>
+            <div id="login-status"></div>
+          </div>
 
-        <div class="auth-features">
-          <div class="auth-feature">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span>Tokens stored locally &mdash; never leave your device</span>
-          </div>
-          <div class="auth-feature">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-            <span>Lossless &amp; Max quality downloads</span>
-          </div>
-          <div class="auth-feature">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="4" height="18"/><rect x="9" y="3" width="4" height="18"/><path d="M16 3l5 2v14l-5 2V3z"/></svg>
-            <span>Browse and download your full library</span>
+          <div class="auth-features">
+            <div class="auth-feature">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Tokens stored locally &mdash; never leave your device</span>
+            </div>
+            <div class="auth-feature">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              <span>Lossless &amp; Max quality downloads</span>
+            </div>
+            <div class="auth-feature">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="4" height="18"/><rect x="9" y="3" width="4" height="18"/><path d="M16 3l5 2v14l-5 2V3z"/></svg>
+              <span>Browse and download your full library</span>
+            </div>
           </div>
         </div>
-      </div>
+      </div><!-- .panel-scroll-body -->
     </section>
 
     <!-- Settings panel -->
     <section id="panel-settings" class="tab-panel hidden">
-      <h2 class="panel-title">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-        Settings
-      </h2>
-      <div class="settings-wrapper">
+      <div class="panel-sticky-header">
+        <h2 class="panel-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          Settings
+        </h2>
+      </div><!-- .panel-sticky-header -->
+      <div class="panel-scroll-body">
+        <div class="settings-wrapper">
 
         <!-- Appearance -->
         <div class="settings-section">
@@ -492,10 +512,8 @@
             About
           </h3>
           <p>
-            <strong>tiddl-web</strong> is the browser front-end for
-            <a href="https://github.com/oskvr37/tiddl" target="_blank" rel="noopener">tiddl</a>, the open-source Tidal downloader.<br /><br />
+            <strong>tiddl-gui</strong> is an open-source, browser-based Tidal downloader.<br /><br />
             Auth tokens are stored in <code>localStorage</code> and never leave your device.
-            For metadata embedding and ffmpeg conversion, install <a href="https://github.com/oskvr37/tiddl" target="_blank" rel="noopener">the CLI version</a>.
           </p>
         </div>
 
@@ -504,15 +522,18 @@
         <button id="btn-save-settings" class="btn-primary">Save settings</button>
         <span id="settings-save-msg" class="settings-save-msg">&#x2713; Settings saved</span>
       </div>
+      </div><!-- .panel-scroll-body -->
     </section>
 
     <!-- Help panel -->
     <section id="panel-help" class="tab-panel hidden">
-      <h2 class="panel-title">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
-        Help
-      </h2>
-      <div class="help-content">
+      <div class="panel-sticky-header">
+        <h2 class="panel-title">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+          Help
+        </h2>
+      </div><!-- .panel-sticky-header -->
+      <div class="panel-scroll-body">
 
         <div class="help-section">
           <h3>1 &mdash; Log in</h3>
@@ -545,7 +566,7 @@
               </tbody>
             </table>
           </div>
-          <p class="help-note">HiFi / Max requires an eligible Tidal subscription. Encrypted (DRM) streams cannot be saved in the browser &mdash; use the CLI for those.</p>
+          <p class="help-note">HiFi / Max requires an eligible Tidal subscription. Encrypted (DRM) streams cannot be saved in the browser.</p>
         </div>
 
         <div class="help-section">
@@ -571,7 +592,7 @@ python3 -m http.server 8080 --directory web</pre>
           <p>Then open <a href="http://localhost:8080" target="_blank">http://localhost:8080</a>. Any static file server works.</p>
         </div>
 
-      </div>
+      </div><!-- .panel-scroll-body -->
     </section>
 
   </main>

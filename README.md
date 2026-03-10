@@ -1,11 +1,9 @@
 # tiddl-gui
 
-> Download Tidal tracks, albums, and playlists at maximum quality — straight from your browser or the command line.
+> Download Tidal tracks, albums, and playlists at maximum quality — straight from your browser.
 
 > [!WARNING]
 > This app is for personal use only and is not affiliated with Tidal. Users must ensure their use complies with Tidal's terms of service and local copyright laws. Downloaded tracks are for personal use and may not be shared or redistributed. The developer assumes no responsibility for misuse of this app.
-
-# Web App
 
 **Live app: <https://19jvjeffery.github.io/tiddl-gui/>**
 
@@ -41,13 +39,17 @@ Select a quality level and click **Download**. Files are saved directly to your 
 | Max | .flac | Up to 24-bit, 192 kHz |
 
 > [!NOTE]
-> Lossless / Max quality requires an eligible Tidal subscription. Encrypted (DRM) streams cannot be saved in the browser — use the CLI for those.
+> Lossless / Max quality requires an eligible Tidal subscription. Encrypted (DRM) streams cannot be saved in the browser.
 
 ### 3 — Search
 
-Open the **Search** tab, type an artist or track name, and press **Search**. Click a result to pre-fill the Download tab.
+Open the **Search** tab, type an artist, track, album, or playlist name, and press **Search**. Click a track to add it to the download queue, or click an artist, album, or playlist card to browse its contents and download items individually or all at once.
 
-### 4 — CORS proxy
+### 4 — Library
+
+Open the **Library** tab (requires sign-in) to browse your saved tracks, albums, and playlists.
+
+### 5 — CORS proxy
 
 Tidal's API blocks direct browser requests. All API calls are routed through a CORS proxy; the default is [corsproxy.io](https://corsproxy.io) and needs no setup.
 
@@ -62,73 +64,3 @@ python3 -m http.server 8080 --directory web
 ```
 
 Open <http://localhost:8080>. Any static file server works (`npx serve web`, `npx http-server web`, etc.).
-
----
-
-# CLI
-
-## Installation
-
-> [!IMPORTANT]
-> Install [`ffmpeg`](https://ffmpeg.org/download.html) first — it is required to convert downloaded tracks.
-
-```bash
-# uv (recommended)
-uv tool install tiddl
-
-# pip
-pip install tiddl
-
-# Docker
-docker pull ghcr.io/19jvjeffery/tiddl:latest
-```
-
-## Authentication
-
-```bash
-tiddl auth login
-```
-
-## Downloading
-
-```bash
-tiddl download url <url>
-```
-
-> [!TIP]
-> Short forms like `track/103805726` or `album/103805723` work too.
-
-Use `--skip-errors` to skip unavailable items in playlists/albums instead of stopping:
-
-```bash
-tiddl download url <url> --skip-errors
-```
-
-### Quality
-
-| Quality | Format | Details |
-|:---:|:---:|:---:|
-| LOW | .m4a | 96 kbps |
-| NORMAL | .m4a | 320 kbps |
-| HIGH | .flac | 16-bit, 44.1 kHz |
-| MAX | .flac | Up to 24-bit, 192 kHz |
-
-### Output format
-
-Use `--output` to control filenames and folder structure. Example:
-
-```bash
-tiddl download url <url> --output "{album.artist}/{album.title}/{item.number:02d}. {item.title}"
-```
-
-See [docs/templating.md](docs/templating.md) for all available placeholders.
-
-## Configuration
-
-App files are stored in `~/.tiddl` by default. Copy [docs/config.example.toml](docs/config.example.toml) to `~/.tiddl/config.toml` to customise defaults.
-
-Set `TIDDL_PATH` to use a different location:
-
-```bash
-TIDDL_PATH=~/custom/tiddl tiddl auth login
-```

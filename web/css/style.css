@@ -97,13 +97,18 @@
 }
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */
-html { font-size: 15px; scroll-behavior: smooth; }
+html {
+  font-size: 15px; scroll-behavior: smooth;
+  /* Lock the outer viewport so only the main panel scrolls */
+  height: 100%; overflow: hidden;
+}
 
 body {
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font);
-  min-height: 100vh;
+  /* Fixed full-viewport height — sidebar and header never scroll */
+  height: 100vh; overflow: hidden;
   display: flex;
   flex-direction: column;
   transition: background var(--t-slow), color var(--t-slow);
@@ -584,7 +589,6 @@ main { flex: 1; padding: var(--sp-6) var(--sp-8); overflow-y: auto; }
     -webkit-backdrop-filter: blur(12px);
     border-top: 1px solid var(--color-border);
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
-    safe-area-inset-bottom: env(safe-area-inset-bottom);
   }
   .mobile-nav .tab-btn {
     flex: 1; text-align: center; justify-content: center;
@@ -593,7 +597,6 @@ main { flex: 1; padding: var(--sp-6) var(--sp-8); overflow-y: auto; }
   }
   .mobile-nav .tab-btn::after { display: none; }
   .mobile-nav .tab-btn.active::before { top: 0; bottom: auto; left: 10%; right: 10%; width: auto; height: 2px; }
-  body { padding-bottom: var(--mob-nav-h); }
 }
 @media (min-width: 641px) { .mobile-nav { display: none; } }
 
@@ -688,3 +691,53 @@ main { flex: 1; padding: var(--sp-6) var(--sp-8); overflow-y: auto; }
   background: var(--color-accent-soft);
 }
 .result-card.selected .result-title { color: var(--color-accent); }
+
+/* ─── Log section (collapsible) ──────────────────────────────────────────── */
+.log-section { margin-bottom: var(--sp-3); }
+.log-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--sp-2);
+}
+.log-header-title {
+  font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted);
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.log-toggle-btn {
+  font-size: 0.72rem; padding: 0.18rem 0.65rem; border-radius: var(--r-sm);
+}
+
+/* Log collapsed */
+.log-box.log-collapsed { display: none; }
+
+/* ─── Queue item active/done/fail states ──────────────────────────────────── */
+@keyframes queue-scan {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.queue-item { position: relative; }
+
+.queue-item.q-downloading {
+  background: var(--color-accent-soft);
+}
+/* Animated progress stripe at item bottom while downloading */
+.queue-item.q-downloading::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--color-accent) 40%,
+              var(--color-accent-light) 60%, transparent 100%);
+  background-size: 200% 100%;
+  animation: queue-scan 1.4s linear infinite;
+}
+
+.queue-item.q-done   { background: rgba(79,208,140,.07); }
+.queue-item.q-failed { background: var(--color-error-soft); }
+
+.queue-item-status { font-size: 0.8rem; width: 18px; text-align: center; flex-shrink: 0; }
+
+/* ZIP download badge on queue items */
+.queue-zip-badge {
+  font-size: 0.62rem; font-weight: 700; padding: 0.08rem 0.38rem;
+  border-radius: var(--r-full); background: var(--color-surface-3);
+  color: var(--color-text-muted); letter-spacing: 0.06em; flex-shrink: 0;
+}

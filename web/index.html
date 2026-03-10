@@ -98,7 +98,16 @@
         <div id="progress-label" class="progress-label">Idle</div>
       </div>
 
-      <div id="download-log" class="log-box" aria-label="Download log" role="log" aria-live="polite"></div>
+      <div class="log-section">
+        <div class="log-header">
+          <span class="log-header-title">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+            Activity Log
+          </span>
+          <button id="btn-toggle-log" class="btn-ghost log-toggle-btn">Show log</button>
+        </div>
+        <div id="download-log" class="log-box log-collapsed" aria-label="Download log" role="log" aria-live="polite"></div>
+      </div>
 
       <p class="download-hint">
         Supported: full Tidal URLs, or short-form IDs like

@@ -286,6 +286,9 @@ async function handleDownload() {
   for (let qi = 0; qi < items.length; qi++) {
     const item = items[qi];
     const qStatusEl = $(`queue-status-${qi}`);
+    // Highlight the queue row as "downloading"
+    const queueItemEl = $("download-queue")?.querySelector(`.queue-item[data-idx="${qi}"]`);
+    if (queueItemEl) queueItemEl.classList.add("q-downloading");
 
     appendLog(`Downloading ${item.type}/${item.id} @ ${quality}`, "info");
     if (qStatusEl) qStatusEl.textContent = "⏳";
@@ -319,10 +322,16 @@ async function handleDownload() {
         if (r.success) { appendLog(`✓ Saved: ${r.filename}`, "success"); totalOk++; }
         else           { appendLog(`✗ Failed: ${r.filename} — ${r.error}`, "error"); totalFail++; }
       }
-      if (qStatusEl) qStatusEl.textContent = results.every((r) => r.success) ? "✓" : "✗";
+      const allOk = results.every((r) => r.success);
+      if (qStatusEl) qStatusEl.textContent = allOk ? "✓" : "✗";
+      if (queueItemEl) {
+        queueItemEl.classList.remove("q-downloading");
+        queueItemEl.classList.add(allOk ? "q-done" : "q-failed");
+      }
     } catch (err) {
       appendLog(`Error (${item.type}/${item.id}): ${err.message}`, "error");
       if (qStatusEl) qStatusEl.textContent = "✗";
+      if (queueItemEl) { queueItemEl.classList.remove("q-downloading"); queueItemEl.classList.add("q-failed"); }
       totalFail++;
     }
 
@@ -573,6 +582,15 @@ export function init() {
   // ── Auth ──
   $("btn-login")?.addEventListener("click", startLogin);
   $("btn-logout")?.addEventListener("click", handleLogout);
+
+  // ── Log toggle ──
+  $("btn-toggle-log")?.addEventListener("click", () => {
+    const log = $("download-log");
+    const btn = $("btn-toggle-log");
+    if (!log || !btn) return;
+    const collapsed = log.classList.toggle("log-collapsed");
+    btn.textContent = collapsed ? "Show log" : "Hide log";
+  });
 
   // ── Download ──
   $("btn-download")?.addEventListener("click", handleDownload);

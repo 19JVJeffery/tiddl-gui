@@ -7,7 +7,7 @@
  */
 
 import { proxied } from "./config.js";
-import { getTrackStream, getVideoStream, getTrack, getAlbumItems, getPlaylistItems, getMixItems } from "./api.js";
+import { getTrackStream, getVideoStream, getTrack, getAlbum, getAlbumItems, getPlaylist, getPlaylistItems, getMixItems } from "./api.js";
 
 /** Delay (ms) before revoking an object URL after triggering a download. */
 const BLOB_URL_REVOKE_DELAY_MS = 1000;
@@ -176,6 +176,145 @@ function sanitize(name) {
   return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").trim().slice(0, MAX_FILENAME_LENGTH);
 }
 
+// ─── Minimal ZIP builder (STORE / no compression) ────────────────────────
+
+/**
+ * Compute CRC-32 of a Uint8Array (ISO 3309 polynomial).
+ * Used by buildZip for the ZIP local/central-directory headers.
+ */
+function crc32(buf) {
+  if (!crc32._t) {
+    const t = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[i] = c;
+    }
+    crc32._t = t;
+  }
+  const t = crc32._t;
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = t[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+/**
+ * Build a ZIP file (STORE method — no compression) from an array of
+ * { name: string, data: Uint8Array } entries.
+ * Suitable for packaging already-compressed audio/video files.
+ * Returns a Uint8Array of the full ZIP binary.
+ */
+function buildZip(files) {
+  const enc = new TextEncoder();
+  const localParts = [];     // Uint8Arrays making up the local file headers + data
+  const centralEntries = []; // Uint8Arrays for the central directory headers
+  let localOffset = 0;
+
+  for (const { name, data } of files) {
+    const nameBytes = enc.encode(name);
+    const checksum = crc32(data);
+    const size = data.byteLength;
+
+    // ── Local file header (30 bytes + file name) ──
+    const lhBuf = new ArrayBuffer(30 + nameBytes.length);
+    const lh = new DataView(lhBuf);
+    lh.setUint32( 0, 0x04034b50, true); // LFH signature
+    lh.setUint16( 4, 20, true);          // version needed (2.0)
+    lh.setUint16( 6, 0x0800, true);      // general-purpose flags: UTF-8 name
+    lh.setUint16( 8, 0, true);           // compression method: STORE
+    lh.setUint16(10, 0, true);           // last mod time
+    lh.setUint16(12, 0, true);           // last mod date
+    lh.setUint32(14, checksum, true);    // CRC-32
+    lh.setUint32(18, size, true);        // compressed size
+    lh.setUint32(22, size, true);        // uncompressed size
+    lh.setUint16(26, nameBytes.length, true); // file name length
+    lh.setUint16(28, 0, true);           // extra field length
+    new Uint8Array(lhBuf).set(nameBytes, 30);
+
+    localParts.push(new Uint8Array(lhBuf), data);
+
+    // ── Central directory header (46 bytes + file name) ──
+    const cdhBuf = new ArrayBuffer(46 + nameBytes.length);
+    const cdh = new DataView(cdhBuf);
+    cdh.setUint32( 0, 0x02014b50, true); // CDH signature
+    cdh.setUint16( 4, 20, true);          // version made by
+    cdh.setUint16( 6, 20, true);          // version needed
+    cdh.setUint16( 8, 0x0800, true);      // general-purpose flags: UTF-8
+    cdh.setUint16(10, 0, true);           // compression: STORE
+    cdh.setUint16(12, 0, true);           // last mod time
+    cdh.setUint16(14, 0, true);           // last mod date
+    cdh.setUint32(16, checksum, true);    // CRC-32
+    cdh.setUint32(20, size, true);        // compressed size
+    cdh.setUint32(24, size, true);        // uncompressed size
+    cdh.setUint16(28, nameBytes.length, true); // file name length
+    cdh.setUint16(30, 0, true);           // extra field length
+    cdh.setUint16(32, 0, true);           // file comment length
+    cdh.setUint16(34, 0, true);           // disk number start
+    cdh.setUint16(36, 0, true);           // internal attributes
+    cdh.setUint32(38, 0, true);           // external attributes
+    cdh.setUint32(42, localOffset, true); // offset of local header
+    new Uint8Array(cdhBuf).set(nameBytes, 46);
+    centralEntries.push(new Uint8Array(cdhBuf));
+
+    localOffset += 30 + nameBytes.length + size;
+  }
+
+  // ── End of central directory record (22 bytes) ──
+  const cdSize = centralEntries.reduce((a, b) => a + b.byteLength, 0);
+  const eocdBuf = new ArrayBuffer(22);
+  const eocd = new DataView(eocdBuf);
+  eocd.setUint32( 0, 0x06054b50, true); // EOCD signature
+  eocd.setUint16( 4, 0, true);           // disk number
+  eocd.setUint16( 6, 0, true);           // central dir start disk
+  eocd.setUint16( 8, files.length, true); // entries on this disk
+  eocd.setUint16(10, files.length, true); // total entries
+  eocd.setUint32(12, cdSize, true);      // size of central dir
+  eocd.setUint32(16, localOffset, true); // offset of central dir
+  eocd.setUint16(20, 0, true);           // comment length
+
+  // Concatenate everything into a single Uint8Array
+  const allParts = [...localParts, ...centralEntries, new Uint8Array(eocdBuf)];
+  const totalBytes = allParts.reduce((a, b) => a + b.byteLength, 0);
+  const zip = new Uint8Array(totalBytes);
+  let pos = 0;
+  for (const part of allParts) { zip.set(part, pos); pos += part.byteLength; }
+  return zip;
+}
+
+// ─── Internal track data fetcher ─────────────────────────────────────────
+
+/**
+ * Fetch and decode a single track's audio data without triggering a browser
+ * save.  Used internally by downloadTrack and the multi-track ZIP bundlers.
+ *
+ * @returns {{ data: Uint8Array, extension: string, title: string,
+ *             artist: string, trackNumber: number }}
+ */
+async function fetchTrackData(trackId, quality, onProgress) {
+  onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
+  const track = await getTrack(trackId);
+  const title = sanitize(track.title || String(trackId));
+  const artist = sanitize(track.artist?.name || "Unknown Artist");
+  const trackNumber = track.trackNumber || 0;
+
+  onProgress?.(0, 1, `Getting stream for "${title}"…`);
+  const streamInfo = await getTrackStream(trackId, quality);
+  const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
+
+  if (encryptionType && encryptionType !== "NONE") {
+    throw new Error(
+      `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
+    );
+  }
+
+  onProgress?.(0, urls.length, `Downloading ${urls.length} segment(s)…`);
+  const data = await fetchSegments(urls, (done, total) =>
+    onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
+  );
+
+  return { data, extension, title, artist, trackNumber };
+}
+
 // ─── Public API ────────────────────────────────────────────────────────────
 
 /**
@@ -187,29 +326,9 @@ function sanitize(name) {
  */
 export async function downloadTrack(trackId, quality = "HIGH", onProgress) {
   try {
-    onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
-    const track = await getTrack(trackId);
-    const title = sanitize(track.title || String(trackId));
-    const artist = sanitize(track.artist?.name || "Unknown Artist");
-
-    onProgress?.(0, 1, `Getting stream for "${title}"…`);
-    const streamInfo = await getTrackStream(trackId, quality);
-    const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
-
-    if (encryptionType && encryptionType !== "NONE") {
-      throw new Error(
-        `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
-      );
-    }
-
-    onProgress?.(0, urls.length, `Downloading ${urls.length} segment(s)…`);
-    const data = await fetchSegments(urls, (done, total) =>
-      onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
-    );
-
+    const { data, extension, title, artist } = await fetchTrackData(trackId, quality, onProgress);
     const filename = `${artist} - ${title}${extension}`;
     triggerDownload(data, filename, extToMime(extension));
-
     return { filename, success: true };
   } catch (err) {
     return { filename: String(trackId), success: false, error: err.message };
@@ -217,60 +336,140 @@ export async function downloadTrack(trackId, quality = "HIGH", onProgress) {
 }
 
 /**
- * Download all tracks in an album.
+ * Download all tracks in an album as a single ZIP file.
+ * ZIP folder structure: `{albumArtist} - {albumTitle}/{track#}. {artist} - {title}.ext`
  */
 export async function downloadAlbum(albumId, quality = "HIGH", onProgress) {
-  onProgress?.(0, 1, `Fetching album items…`);
-  const itemsData = await getAlbumItems(albumId, 100, 0);
-  const items = (itemsData.items || []).filter((i) => i.type === "track");
-  const results = [];
-  for (let i = 0; i < items.length; i++) {
-    const track = items[i].item;
-    onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
-    const r = await downloadTrack(track.id, quality, (d, t, msg) =>
-      onProgress?.(i, items.length, msg)
-    );
-    results.push(r);
+  try {
+    onProgress?.(0, 1, `Fetching album info…`);
+    const [albumMeta, itemsData] = await Promise.all([
+      getAlbum(albumId),
+      getAlbumItems(albumId, 100, 0),
+    ]);
+
+    const albumTitle  = sanitize(albumMeta.title || "Unknown Album");
+    const albumArtist = sanitize(albumMeta.artist?.name || "Unknown Artist");
+    const folder = `${albumArtist} - ${albumTitle}`;
+
+    const items = (itemsData.items || []).filter((i) => i.type === "track");
+    const zipFiles = [];
+    const results = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const track = items[i].item;
+      onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
+      try {
+        const td = await fetchTrackData(track.id, quality, (d, t, msg) =>
+          onProgress?.(i, items.length, msg)
+        );
+        const num = String(td.trackNumber || (i + 1)).padStart(2, "0");
+        const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
+        zipFiles.push({ name: fname, data: td.data });
+        results.push({ filename: fname, success: true });
+      } catch (err) {
+        results.push({ filename: track.title || String(track.id), success: false, error: err.message });
+      }
+    }
+
+    if (zipFiles.length > 0) {
+      onProgress?.(items.length, items.length, `Packaging ${zipFiles.length} track(s) as ZIP…`);
+      const zip = buildZip(zipFiles);
+      triggerDownload(zip, `${folder}.zip`, "application/zip");
+    }
+
+    return results;
+  } catch (err) {
+    return [{ filename: String(albumId), success: false, error: err.message }];
   }
-  return results;
 }
 
 /**
- * Download all tracks in a playlist.
+ * Download all tracks in a playlist as a single ZIP file.
+ * ZIP folder structure: `{playlistTitle}/{track#}. {artist} - {title}.ext`
  */
 export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress) {
-  onProgress?.(0, 1, `Fetching playlist items…`);
-  const itemsData = await getPlaylistItems(playlistId, 100, 0);
-  const items = (itemsData.items || []).filter((i) => i.type === "track");
-  const results = [];
-  for (let i = 0; i < items.length; i++) {
-    const track = items[i].item;
-    onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
-    const r = await downloadTrack(track.id, quality, (d, t, msg) =>
-      onProgress?.(i, items.length, msg)
-    );
-    results.push(r);
+  try {
+    onProgress?.(0, 1, `Fetching playlist info…`);
+    const [playlistMeta, itemsData] = await Promise.all([
+      getPlaylist(playlistId),
+      getPlaylistItems(playlistId, 100, 0),
+    ]);
+
+    const playlistTitle = sanitize(playlistMeta.title || "Playlist");
+    const folder = playlistTitle;
+
+    const items = (itemsData.items || []).filter((i) => i.type === "track");
+    const zipFiles = [];
+    const results = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const track = items[i].item;
+      onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
+      try {
+        const td = await fetchTrackData(track.id, quality, (d, t, msg) =>
+          onProgress?.(i, items.length, msg)
+        );
+        const num = String(i + 1).padStart(2, "0");
+        const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
+        zipFiles.push({ name: fname, data: td.data });
+        results.push({ filename: fname, success: true });
+      } catch (err) {
+        results.push({ filename: track.title || String(track.id), success: false, error: err.message });
+      }
+    }
+
+    if (zipFiles.length > 0) {
+      onProgress?.(items.length, items.length, `Packaging ${zipFiles.length} track(s) as ZIP…`);
+      const zip = buildZip(zipFiles);
+      triggerDownload(zip, `${folder}.zip`, "application/zip");
+    }
+
+    return results;
+  } catch (err) {
+    return [{ filename: String(playlistId), success: false, error: err.message }];
   }
-  return results;
 }
 
 /**
- * Download all tracks in a mix.
+ * Download all tracks in a mix as a single ZIP file.
+ * ZIP folder structure: `Mix/{track#}. {artist} - {title}.ext`
  */
 export async function downloadMix(mixId, quality = "HIGH", onProgress) {
-  onProgress?.(0, 1, `Fetching mix items…`);
-  const itemsData = await getMixItems(mixId, 100, 0);
-  const items = (itemsData.items || []).filter((i) => i.type === "track");
-  const results = [];
-  for (let i = 0; i < items.length; i++) {
-    const track = items[i].item;
-    onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
-    const r = await downloadTrack(track.id, quality, (d, t, msg) =>
-      onProgress?.(i, items.length, msg)
-    );
-    results.push(r);
+  try {
+    onProgress?.(0, 1, `Fetching mix items…`);
+    const itemsData = await getMixItems(mixId, 100, 0);
+
+    const folder = sanitize(`Mix-${mixId}`);
+    const items = (itemsData.items || []).filter((i) => i.type === "track");
+    const zipFiles = [];
+    const results = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const track = items[i].item;
+      onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
+      try {
+        const td = await fetchTrackData(track.id, quality, (d, t, msg) =>
+          onProgress?.(i, items.length, msg)
+        );
+        const num = String(i + 1).padStart(2, "0");
+        const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
+        zipFiles.push({ name: fname, data: td.data });
+        results.push({ filename: fname, success: true });
+      } catch (err) {
+        results.push({ filename: track.title || String(track.id), success: false, error: err.message });
+      }
+    }
+
+    if (zipFiles.length > 0) {
+      onProgress?.(items.length, items.length, `Packaging ${zipFiles.length} track(s) as ZIP…`);
+      const zip = buildZip(zipFiles);
+      triggerDownload(zip, `${folder}.zip`, "application/zip");
+    }
+
+    return results;
+  } catch (err) {
+    return [{ filename: String(mixId), success: false, error: err.message }];
   }
-  return results;
 }
 
 // ─── URL / ID parser (mirrors tiddl/cli/utils/resource.py) ────────────────

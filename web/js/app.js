@@ -190,6 +190,12 @@ function buildProgressList(items) {
     const thumbHtml = item.cover
       ? `<img src="${escHtml(item.cover)}" alt="" class="dl-item-thumb${item.coverRound ? " round" : ""}" loading="lazy" />`
       : `<div class="dl-item-thumb${item.coverRound ? " round" : ""}"></div>`;
+    const isMulti = ["album", "playlist", "mix", "artist"].includes(item.type);
+    const expandBtn = isMulti
+      ? `<button class="dl-item-expand-btn" data-expand-idx="${idx}" aria-label="Show track details" aria-expanded="false" title="Expand to see individual track progress">
+           <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+         </button>`
+      : "";
     return `<div class="dl-item-row dl-item-row--pending" id="dl-item-row-${idx}">
       ${thumbHtml}
       <div class="dl-item-details">
@@ -197,9 +203,60 @@ function buildProgressList(items) {
         <div class="dl-item-msg" id="dl-item-msg-${idx}">Waiting\u2026</div>
         <div class="dl-item-bar-track"><div class="dl-item-bar-fill" id="dl-item-bar-${idx}" style="width:0%"></div></div>
       </div>
+      ${expandBtn}
       <span class="dl-item-icon" id="dl-item-icon-${idx}"></span>
-    </div>`;
+    </div>
+    <div class="dl-item-sub-list hidden" id="dl-item-sub-${idx}"></div>`;
   }).join("");
+
+  // Use event delegation on the list container to avoid per-button listeners
+  list.addEventListener("click", (e) => {
+    const btn = e.target.closest(".dl-item-expand-btn");
+    if (!btn) return;
+    const idx = btn.dataset.expandIdx;
+    const subList = $(`dl-item-sub-${idx}`);
+    if (!subList) return;
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", String(!expanded));
+    btn.classList.toggle("expanded", !expanded);
+    subList.classList.toggle("hidden", expanded);
+  });
+}
+
+// ─── Per-item sub-progress rows ───────────────────────────────────────────────
+
+function upsertSubItemRow(rowIdx, subIdx, title, done, total, status) {
+  const subList = $(`dl-item-sub-${rowIdx}`);
+  if (!subList) return;
+
+  let subRow = $(`dl-sub-item-${rowIdx}-${subIdx}`);
+  if (!subRow) {
+    subRow = document.createElement("div");
+    subRow.id = `dl-sub-item-${rowIdx}-${subIdx}`;
+    subRow.className = "dl-sub-item dl-sub-item--active";
+    subRow.innerHTML = `
+      <div class="dl-sub-item-details">
+        <div class="dl-sub-item-title" id="dl-sub-item-title-${rowIdx}-${subIdx}">${escHtml(title)}</div>
+        <div class="dl-sub-item-bar-track">
+          <div class="dl-sub-item-bar-fill" id="dl-sub-item-bar-${rowIdx}-${subIdx}" style="width:0%"></div>
+        </div>
+      </div>
+      <span class="dl-sub-item-icon" id="dl-sub-item-icon-${rowIdx}-${subIdx}"></span>
+    `;
+    subList.appendChild(subRow);
+  }
+
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const barEl   = $(`dl-sub-item-bar-${rowIdx}-${subIdx}`);
+  const iconEl  = $(`dl-sub-item-icon-${rowIdx}-${subIdx}`);
+  const titleEl = $(`dl-sub-item-title-${rowIdx}-${subIdx}`);
+
+  if (barEl)   barEl.style.width = `${pct}%`;
+  if (titleEl) titleEl.textContent = title;
+  subRow.className = `dl-sub-item dl-sub-item--${status}`;
+  if (iconEl) {
+    iconEl.textContent = status === "done" ? "\u2713" : status === "failed" ? "\u2717" : "";
+  }
 }
 
 // ─── Nav ─────────────────────────────────────────────────────────────────────
@@ -586,14 +643,21 @@ async function handleDownload() {
       if (itemMsgEl && msg) itemMsgEl.textContent = msg;
     };
 
+    const isMulti = ["album", "playlist", "mix", "artist"].includes(item.type);
+    const onSubItemProgress = isMulti
+      ? (subIdx, subTotal, title, done, total, status) => {
+          upsertSubItemRow(qi, subIdx, title, done, total, status);
+        }
+      : undefined;
+
     try {
       let results = [];
       switch (item.type) {
         case "track":    results = [await downloadTrack(item.id, quality, onProgress)]; break;
-        case "album":    results = await downloadAlbum(item.id, quality, onProgress); break;
-        case "playlist": results = await downloadPlaylist(item.id, quality, onProgress); break;
-        case "mix":      results = await downloadMix(item.id, quality, onProgress); break;
-        case "artist":   results = await downloadArtistAlbums(item.id, quality, onProgress); break;
+        case "album":    results = await downloadAlbum(item.id, quality, onProgress, onSubItemProgress); break;
+        case "playlist": results = await downloadPlaylist(item.id, quality, onProgress, onSubItemProgress); break;
+        case "mix":      results = await downloadMix(item.id, quality, onProgress, onSubItemProgress); break;
+        case "artist":   results = await downloadArtistAlbums(item.id, quality, onProgress, onSubItemProgress); break;
         default:
           appendLog(`Resource type "${item.type}" not yet supported in the browser.`, "warn");
           results = [{ filename: String(item.id), success: false, error: "unsupported type" }];

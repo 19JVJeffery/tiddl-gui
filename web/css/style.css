@@ -828,6 +828,63 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .dl-item-row--done   .dl-item-icon { color: var(--color-success); }
 .dl-item-row--failed .dl-item-icon { color: var(--color-error); }
 
+/* ─── Expand button (multi-item queue rows) ──────────────────────────────── */
+.dl-item-expand-btn {
+  flex-shrink: 0;
+  background: none; border: none; cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0.25rem; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  transition: color var(--t-fast);
+}
+.dl-item-expand-btn:hover { color: var(--color-text); }
+.dl-item-expand-btn svg { transition: transform var(--t-fast); transform: rotate(-90deg); }
+.dl-item-expand-btn.expanded svg { transform: rotate(0deg); }
+
+/* ─── Sub-item progress list ─────────────────────────────────────────────── */
+.dl-item-sub-list {
+  background: var(--color-surface-2);
+  border-top: 1px solid var(--color-border-soft);
+  max-height: 200px; overflow-y: auto;
+}
+.dl-item-sub-list.hidden { display: none; }
+
+.dl-sub-item {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.3rem 0.75rem 0.3rem 1.25rem;
+  border-top: 1px solid var(--color-border-soft);
+  transition: background var(--t-fast);
+}
+.dl-sub-item:first-child { border-top: none; }
+.dl-sub-item--active  { background: var(--color-accent-soft); }
+.dl-sub-item--done    { background: rgba(79,208,140,.04); }
+.dl-sub-item--failed  { background: var(--color-error-soft); }
+
+.dl-sub-item-details { flex: 1; min-width: 0; }
+.dl-sub-item-title {
+  font-size: 0.72rem; color: var(--color-text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.dl-sub-item-bar-track {
+  height: 2px; border-radius: 9999px;
+  background: var(--color-surface-3); overflow: hidden;
+}
+.dl-sub-item-bar-fill {
+  height: 100%; border-radius: 9999px; width: 0%;
+  background: var(--color-accent);
+  transition: width 0.35s cubic-bezier(.4,0,.2,1);
+}
+.dl-sub-item--done   .dl-sub-item-bar-fill { background: var(--color-success); }
+.dl-sub-item--failed .dl-sub-item-bar-fill { background: var(--color-error); width: 100%; }
+
+.dl-sub-item-icon {
+  font-size: 0.75rem; flex-shrink: 0;
+  width: 16px; text-align: center; color: var(--color-text-muted);
+}
+.dl-sub-item--done   .dl-sub-item-icon { color: var(--color-success); }
+.dl-sub-item--failed .dl-sub-item-icon { color: var(--color-error); }
+
 /* Log view: the log box sits flush inside the view */
 .dl-status-view > .log-box {
   border: none; border-radius: 0; height: 220px;

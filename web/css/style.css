@@ -1311,11 +1311,11 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .card-queue-btn:hover { background: var(--color-accent-light); transform: scale(1.12); }
 .card-queue-btn.in-queue { background: var(--color-success); opacity: 1; transform: scale(1); }
 /* Remove feedback: in-queue button turns red with × icon on hover */
-.card-queue-btn.in-queue:hover {
-  background: var(--color-error) !important;
+.result-card--nav .card-queue-btn.in-queue:hover {
+  background: var(--color-error);
 }
-.card-queue-btn.in-queue:hover svg { display: none; }
-.card-queue-btn.in-queue:hover::after {
+.result-card--nav .card-queue-btn.in-queue:hover svg { display: none; }
+.result-card--nav .card-queue-btn.in-queue:hover::after {
   content: '×'; font-size: 15px; font-weight: 700; color: #fff; line-height: 1;
 }
 

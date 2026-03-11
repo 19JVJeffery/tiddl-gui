@@ -586,13 +586,13 @@ function setProgress(done, total, message) {
 // ─── Download ─────────────────────────────────────────────────────────────────
 
 function expandStatusBar() {
-  const bar = $("dl-status-bar");
-  const btn = $("btn-toggle-status-bar");
-  if (bar && bar.classList.contains("collapsed")) {
-    bar.classList.remove("collapsed");
-    if (btn) {
-      btn.setAttribute("aria-expanded", "true");
-      btn.setAttribute("aria-label", "Collapse status bar");
+  const statusBar = $("dl-status-bar");
+  const toggleButton = $("btn-toggle-status-bar");
+  if (statusBar && statusBar.classList.contains("collapsed")) {
+    statusBar.classList.remove("collapsed");
+    if (toggleButton) {
+      toggleButton.setAttribute("aria-expanded", "true");
+      toggleButton.setAttribute("aria-label", "Collapse status bar");
     }
   }
 }
@@ -1283,7 +1283,6 @@ async function navigateToDetail(type, id, title, sub, cover, fromTab) {
     if (existing !== -1) {
       removeFromQueue(existing);
       dlQueueBtn.className = "btn-primary";
-      dlQueueBtn.classList.remove("in-queue");
       dlQueueBtn.innerHTML = _detailQueueBtnHtml(typeLabel, false);
       appendLog(`Removed ${type}/${id} from queue.`, "info");
     } else {

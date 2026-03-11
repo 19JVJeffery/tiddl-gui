@@ -64,6 +64,7 @@ async function postForm(url, params) {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
+    credentials: "omit",
   });
   const json = await res.json();
   if (!res.ok) throw new TidalAuthError(res.status, json);
@@ -80,6 +81,7 @@ async function postFormWithBasicAuth(url, params, clientId, clientSecret) {
       Authorization: `Basic ${credentials}`,
     },
     body: body.toString(),
+    credentials: "omit",
   });
   const json = await res.json();
   if (!res.ok) throw new TidalAuthError(res.status, json);

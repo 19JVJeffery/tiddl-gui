@@ -11,9 +11,10 @@ import {
 import {
   search,
   getTrack,
-  getArtistAlbums, getArtistSingles,
+  getArtist, getArtistAlbums, getArtistSingles,
   getAlbum,
   getPlaylist,
+  getVideo,
   getUserFavoriteTracks, getUserFavoriteAlbums,
   getUserFavoritePlaylists, getUserPlaylists,
   getAllUserFavoriteTracks, getAllUserFavoriteAlbums,
@@ -405,7 +406,11 @@ async function startLogin() {
     pollTimer = setTimeout(poll, deviceAuth.interval * 1000);
   } catch (err) {
     const msg = err?.message || JSON.stringify(err);
-    setHtml(loginStatus, `<span class="error">Failed to start login: ${escHtml(msg)}</span>`);
+    const isNetworkError = msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("networkerror");
+    const hint = isNetworkError
+      ? `<br><small style="opacity:0.8">A browser extension or firewall may be blocking the CORS proxy. Try disabling extensions, or change the proxy in Settings \u2192 Advanced.</small>`
+      : "";
+    setHtml(loginStatus, `<span class="error">Failed to start login: ${escHtml(msg)}${hint}</span>`);
     loginBtn.disabled = false;
   }
 }
@@ -799,7 +804,7 @@ function addUrlPill(raw) {
 async function enrichQueueItemFromUrl(type, id) {
   if (!isLoggedIn()) return;
   try {
-    let title = "", sub = "", cover = "";
+    let title = "", sub = "", cover = "", coverRound = false;
     if (type === "track") {
       const data = await getTrack(id);
       title = data.title || "";
@@ -815,8 +820,19 @@ async function enrichQueueItemFromUrl(type, id) {
       title = data.title || "";
       sub   = data.creator?.name || "Tidal";
       cover = coverUrl(data.image || data.squareImage);
+    } else if (type === "artist") {
+      const data = await getArtist(id);
+      title = data.name || "";
+      sub   = "Artist";
+      cover = coverUrl(data.picture);
+      coverRound = true;
+    } else if (type === "video") {
+      const data = await getVideo(id);
+      title = data.title || "";
+      sub   = data.artist?.name || "";
+      cover = coverUrl(data.imageId || data.album?.cover);
     } else {
-      return; // artist / mix / video — no enrichment needed here
+      return; // mix — no direct metadata endpoint
     }
     if (!title) return;
     const item = downloadQueue.find(
@@ -826,6 +842,7 @@ async function enrichQueueItemFromUrl(type, id) {
       item.title = title;
       item.sub   = sub;
       item.cover = cover;
+      item.coverRound = coverRound;
       renderQueue();
     }
     // Also update the URL pill label so it shows the real title instead of type/id

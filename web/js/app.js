@@ -192,7 +192,7 @@ function buildProgressList(items) {
       : `<div class="dl-item-thumb${item.coverRound ? " round" : ""}"></div>`;
     const isMulti = ["album", "playlist", "mix", "artist"].includes(item.type);
     const expandBtn = isMulti
-      ? `<button class="dl-item-expand-btn" data-expand-idx="${idx}" aria-label="Show track details" aria-expanded="false" title="Expand to see individual track progress">
+      ? `<button class="dl-item-expand-btn" data-expand-idx="${idx}" aria-label="Toggle download progress details" aria-expanded="false" title="Expand to see individual track progress">
            <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
          </button>`
       : "";
@@ -1232,7 +1232,7 @@ async function navigateToDetail(type, id, title, sub, cover, fromTab) {
     <div class="detail-header-info">
       <span class="detail-type-badge">${escHtml(typeLabel)}</span>
       <h2 class="detail-title">${escHtml(title)}</h2>
-      <p class="detail-sub">${escHtml(sub)}</p>
+      <p class="detail-sub" id="detail-sub">${escHtml(sub)}</p>
       <div class="detail-actions">
         <button class="btn-primary" id="btn-detail-dl-queue">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1321,6 +1321,23 @@ async function renderAlbumDetail(albumId, body) {
     getAllAlbumItems(albumId),
   ]);
   const tracks = (allItems || []).filter((i) => i.type === "track").map((i) => i.item);
+
+  // Make the artist name in the header a link to the artist's detail page
+  const artistId   = albumMeta.artist?.id;
+  const artistName = albumMeta.artist?.name || "";
+  const artistCover = coverUrl(albumMeta.artist?.picture);
+  const subEl = $("detail-sub");
+  if (subEl && artistId) {
+    subEl.innerHTML = "";
+    const btn = document.createElement("button");
+    btn.className = "detail-artist-link";
+    btn.textContent = artistName;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      navigateToDetail("artist", artistId, artistName, "", artistCover, _detailOriginTab);
+    });
+    subEl.appendChild(btn);
+  }
 
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));

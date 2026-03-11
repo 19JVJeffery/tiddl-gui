@@ -1301,6 +1301,14 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .detail-sub { font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: var(--sp-4); }
 .detail-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
+/* Clickable artist name link inside the detail subtitle */
+.detail-artist-link {
+  background: none; border: none; cursor: pointer; padding: 0;
+  font-size: 0.9rem; color: var(--color-text-muted);
+  transition: color var(--t-fast);
+}
+.detail-artist-link:hover { color: var(--color-accent); text-decoration: underline; }
+
 .detail-body { animation: slide-up var(--t-normal) ease both; padding-bottom: var(--sp-8); }
 
 /* Track list in detail view */

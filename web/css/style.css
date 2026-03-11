@@ -776,13 +776,40 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 }
 .result-card.selected .result-title { color: var(--color-accent); }
 
+/* ─── Pinned status bar ──────────────────────────────────────────────────── */
+.dl-status-bar {
+  flex-shrink: 0;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  transition: background var(--t-slow), border-color var(--t-slow);
+  z-index: 100;
+}
+
+/* When collapsed, hide the panel body but keep the tab/control row visible */
+.dl-status-bar.collapsed .dl-status-panel-body { display: none; }
+
+.dl-status-panel-body { display: flex; flex-direction: column; }
+
+.dl-toggle-btn {
+  font-size: 0.72rem; padding: 0.18rem 0.45rem;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Chevron: default (expanded) points DOWN (v) = collapse; when collapsed points UP (^) = expand */
+.dl-toggle-btn svg { transition: transform var(--t-fast); transform: rotate(180deg); }
+.dl-status-bar.collapsed .dl-toggle-btn svg { transform: rotate(0deg); }
+
+/* Mobile: add bottom padding so the status bar clears the fixed mobile nav */
+@media (max-width: 640px) {
+  .dl-status-bar { padding-bottom: var(--mob-nav-h); }
+}
+
 /* ─── Download status panel (progress / log tabs) ────────────────────────── */
 .dl-status-panel {
-  border: 1px solid var(--color-border);
-  border-radius: var(--r);
+  border: none;
+  border-radius: 0;
   overflow: hidden;
-  margin-bottom: var(--sp-4);
-  background: var(--color-surface);
+  margin-bottom: 0;
+  background: transparent;
 }
 
 .dl-status-tabs {
@@ -1283,6 +1310,14 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .result-card--nav:hover .card-queue-btn { opacity: 1; transform: scale(1); }
 .card-queue-btn:hover { background: var(--color-accent-light); transform: scale(1.12); }
 .card-queue-btn.in-queue { background: var(--color-success); opacity: 1; transform: scale(1); }
+/* Remove feedback: in-queue button turns red with × icon on hover */
+.result-card--nav .card-queue-btn.in-queue:hover {
+  background: var(--color-error);
+}
+.result-card--nav .card-queue-btn.in-queue:hover svg { display: none; }
+.result-card--nav .card-queue-btn.in-queue:hover::after {
+  content: '×'; font-size: 15px; font-weight: 700; color: #fff; line-height: 1;
+}
 
 /* Selected non-track card */
 .result-card--nav.selected { border-color: var(--color-accent); }
@@ -1295,6 +1330,16 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
   transform: translateY(-1px) scale(1.01);
 }
 .result-card.selected .result-title { color: var(--color-accent); }
+
+/* Remove feedback: hovering a selected track card transforms the check into a remove indicator */
+.result-card.selected:hover .result-card-check {
+  background: var(--color-error);
+  box-shadow: 0 2px 10px rgba(240,112,112,.4);
+}
+.result-card.selected:hover .result-card-check svg { display: none; }
+.result-card.selected:hover .result-card-check::after {
+  content: '×'; font-size: 22px; font-weight: 700; color: #fff; line-height: 1;
+}
 
 /* ─── Detail panel ────────────────────────────────────────────────────────── */
 .detail-topbar {
@@ -1334,6 +1379,20 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 }
 .detail-sub { font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: var(--sp-4); }
 .detail-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+/* Detail queue button: in-queue state shows removal action */
+#btn-detail-dl-queue.in-queue {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  box-shadow: none;
+}
+#btn-detail-dl-queue.in-queue:hover {
+  background: var(--color-error-soft);
+  border-color: var(--color-error);
+  color: var(--color-error);
+  box-shadow: none;
+}
 
 /* Clickable artist name link inside the detail subtitle */
 .detail-artist-link {

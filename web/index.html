@@ -115,33 +115,6 @@
         <div id="download-queue" class="download-queue" aria-label="Download queue"></div>
       </div>
 
-      <div id="dl-status-panel" class="dl-status-panel">
-        <div class="dl-status-tabs">
-          <button class="dl-tab-btn active" id="dl-tab-progress-btn" aria-selected="true">
-            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            Progress
-          </button>
-          <button class="dl-tab-btn" id="dl-tab-log-btn" aria-selected="false">
-            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-            Log
-          </button>
-          <div class="dl-tab-spacer"></div>
-          <button id="btn-clear-log" class="btn-ghost dl-clear-log-btn hidden">Clear log</button>
-        </div>
-
-        <div id="dl-progress-view" class="dl-status-view">
-          <div class="progress-section">
-            <div class="progress-track"><div id="progress-bar" class="progress-fill" style="width:0%"></div></div>
-            <div id="progress-label" class="progress-label">Idle</div>
-          </div>
-          <div id="dl-item-progress-list" class="dl-item-progress-list"></div>
-        </div>
-
-        <div id="dl-log-view" class="dl-status-view hidden">
-          <div id="download-log" class="log-box" aria-label="Download log" role="log" aria-live="polite"></div>
-        </div>
-      </div>
-
       <p class="download-hint">
         Type or paste Tidal URLs / short IDs (e.g. <code>track/103805726</code>, <code>album/103805723</code>) and press <kbd>Enter</kbd> to add to queue.
         Paste multiple URLs at once or use <strong>Import file</strong> for a text file. Encrypted streams cannot be saved in the browser.
@@ -724,6 +697,39 @@ python3 -m http.server 8080 --directory web</pre>
     </section>
 
   </main>
+</div>
+
+<!-- ── Pinned status bar (progress / log) — always visible at screen bottom ── -->
+<div class="dl-status-bar collapsed" id="dl-status-bar">
+  <div id="dl-status-panel" class="dl-status-panel">
+    <div class="dl-status-tabs">
+      <button class="dl-tab-btn active" id="dl-tab-progress-btn" aria-selected="true">
+        <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Progress
+      </button>
+      <button class="dl-tab-btn" id="dl-tab-log-btn" aria-selected="false">
+        <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        Log
+      </button>
+      <div class="dl-tab-spacer"></div>
+      <button id="btn-clear-log" class="btn-ghost dl-clear-log-btn hidden">Clear log</button>
+      <button id="btn-toggle-status-bar" class="btn-ghost dl-toggle-btn" title="Collapse / expand status bar" aria-label="Expand status bar" aria-expanded="false">
+        <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+    </div>
+    <div class="dl-status-panel-body">
+      <div id="dl-progress-view" class="dl-status-view">
+        <div class="progress-section">
+          <div class="progress-track"><div id="progress-bar" class="progress-fill" style="width:0%"></div></div>
+          <div id="progress-label" class="progress-label">Idle</div>
+        </div>
+        <div id="dl-item-progress-list" class="dl-item-progress-list"></div>
+      </div>
+      <div id="dl-log-view" class="dl-status-view hidden">
+        <div id="download-log" class="log-box" aria-label="Download log" role="log" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <nav class="mobile-nav">

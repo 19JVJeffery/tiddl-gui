@@ -362,6 +362,27 @@
             </div>
           </div>
           <div class="field-group">
+            <label class="field-label">UI Effects <span class="tip" tabindex="0" data-tip="Controls glassmorphism, animation speed, and blur effects. 'Full' enables all glass effects; 'Reduced' tones them down; 'Minimal' disables most motion and blur; 'Classic' restores the original solid-surface look with no transparency.">?</span></label>
+            <div class="segmented-control">
+              <button class="seg-btn" data-effects-val="full">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z"/></svg>
+                Full
+              </button>
+              <button class="seg-btn" data-effects-val="reduced">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                Reduced
+              </button>
+              <button class="seg-btn" data-effects-val="minimal">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                Minimal
+              </button>
+              <button class="seg-btn" data-effects-val="classic">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="3"/><path d="M2 7h20M7 2v5"/></svg>
+                Classic
+              </button>
+            </div>
+          </div>
+          <div class="field-group">
             <label class="field-label">Accent Colour <span class="tip" tabindex="0" data-tip="The highlight colour used for buttons, selected items, active states, and progress bars throughout the app.">?</span></label>
             <div class="color-swatches">
               <button class="swatch" data-color="#4fd08c" style="--c:#4fd08c" title="Green (default)" aria-label="Green"></button>
@@ -556,11 +577,11 @@
         </div>
 
       </div>
+      </div><!-- .panel-scroll-body -->
       <div class="settings-save-strip">
         <button id="btn-save-settings" class="btn-primary">Save settings</button>
         <span id="settings-save-msg" class="settings-save-msg">&#x2713; Settings saved</span>
       </div>
-      </div><!-- .panel-scroll-body -->
     </section>
 
     <!-- Help panel -->

@@ -119,6 +119,9 @@
   --glass-panel-hdr:  var(--color-bg);
   --glass-save-strip: var(--color-surface);
 }
+[data-effects="classic"] .panel-sticky-header {
+  border-bottom-color: transparent;
+}
 /* Reduced: shorter durations, smaller blur */
 [data-effects="reduced"] {
   --t-fast:   60ms ease;
@@ -137,6 +140,9 @@
   --glass-panel-hdr:  var(--color-bg);
   --glass-save-strip: var(--color-surface);
 }
+/* !important is required here: these rules must override any inline or
+   component-scoped durations set elsewhere. This is the standard approach
+   per MDN and is used in Bootstrap, Tailwind, and other major frameworks. */
 [data-effects="minimal"] *,
 [data-effects="minimal"] *::before,
 [data-effects="minimal"] *::after {
@@ -150,6 +156,8 @@
 }
 
 /* ─── Prefers reduced motion ─────────────────────────────────────────────── */
+/* Intentionally mirrors [data-effects="minimal"] — this responds to the OS
+   preference independently of the user's in-app setting. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;

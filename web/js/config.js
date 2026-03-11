@@ -66,7 +66,7 @@ export function setAccentColor(v) {
   localStorage.setItem("tiddl_accent", v);
 }
 
-/** "full" | "reduced" | "minimal" */
+/** "full" | "reduced" | "minimal" | "classic" */
 export function getUiEffects() {
   return localStorage.getItem("tiddl_ui_effects") || "full";
 }

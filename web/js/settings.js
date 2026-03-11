@@ -36,10 +36,10 @@ import {
 
 // ─── UI Effects ───────────────────────────────────────────────────────────────
 
-/** Apply a UI effects level ("full" | "reduced" | "minimal") to <html>. */
+/** Apply a UI effects level ("full" | "reduced" | "minimal" | "classic") to <html>. */
 export function applyUiEffects(level) {
   const root = document.documentElement;
-  const validLevels = ["full", "reduced", "minimal"];
+  const validLevels = ["full", "reduced", "minimal", "classic"];
   const safeLevel = validLevels.includes(level) ? level : "full";
   root.setAttribute("data-effects", safeLevel);
   document.querySelectorAll(".seg-btn[data-effects-val]").forEach((btn) => {

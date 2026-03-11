@@ -111,6 +111,14 @@
 }
 
 /* ─── UI Effects levels ──────────────────────────────────────────────────── */
+/* Classic: solid opaque surfaces, no blur — original look */
+[data-effects="classic"] {
+  --blur:             0px;
+  --glass-header:     var(--color-surface);
+  --glass-sidebar:    var(--color-surface);
+  --glass-panel-hdr:  var(--color-bg);
+  --glass-save-strip: var(--color-surface);
+}
 /* Reduced: shorter durations, smaller blur */
 [data-effects="reduced"] {
   --t-fast:   60ms ease;
@@ -124,6 +132,10 @@
   --t-normal: 1ms;
   --t-slow:   1ms;
   --blur:     0px;
+  --glass-header:     var(--color-surface);
+  --glass-sidebar:    var(--color-surface);
+  --glass-panel-hdr:  var(--color-bg);
+  --glass-save-strip: var(--color-surface);
 }
 [data-effects="minimal"] *,
 [data-effects="minimal"] *::before,
@@ -549,7 +561,7 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .error { color: var(--color-error); }
 
 /* ─── Settings tab ───────────────────────────────────────────────────────── */
-.settings-wrapper { max-width: 700px; display: flex; flex-direction: column; gap: var(--sp-4); padding-bottom: 80px; }
+.settings-wrapper { max-width: 700px; display: flex; flex-direction: column; gap: var(--sp-4); }
 
 .settings-section {
   background: var(--color-surface); border: 1px solid var(--color-border);
@@ -656,12 +668,13 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 
 /* ─── Settings save strip ─────────────────────────────────────────────────── */
 .settings-save-strip {
-  position: sticky; bottom: 0; z-index: 100;
-  background: var(--color-surface); border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+  background: var(--glass-save-strip); border-top: 1px solid var(--color-border);
   padding: var(--sp-3) var(--sp-8);
   display: flex; align-items: center; gap: var(--sp-3);
-  margin: 0 calc(-1 * var(--sp-8)); width: calc(100% + var(--sp-8) * 2);
-  transition: background var(--t-slow);
+  transition: background var(--t-slow), border-color var(--t-slow);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
 }
 .settings-save-msg { font-size: 0.8rem; color: var(--color-success); opacity: 0; transition: opacity .4s; }
 .settings-save-msg.visible { opacity: 1; }
@@ -719,7 +732,7 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
   main { padding: 0; }
   .panel-sticky-header { padding: var(--sp-4) var(--sp-4) 0; }
   .panel-scroll-body { padding: var(--sp-3) var(--sp-4) calc(var(--mob-nav-h) + var(--sp-4)); }
-  .settings-save-strip { margin: 0 calc(-1 * var(--sp-4)); width: calc(100% + var(--sp-4) * 2); padding: var(--sp-3) var(--sp-4); }
+  .settings-save-strip { padding: var(--sp-3) var(--sp-4); }
   .settings-grid { grid-template-columns: 1fr; }
 
   .mobile-nav {

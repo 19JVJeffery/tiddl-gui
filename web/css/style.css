@@ -36,11 +36,12 @@
   --sidebar-w:   196px;
   --mob-nav-h:   64px;
   /* Glassmorphism */
-  --blur:             14px;
-  --glass-header:     rgba(11, 11, 20, 0.82);
-  --glass-sidebar:    rgba(17, 17, 32, 0.88);
-  --glass-panel-hdr:  rgba(11, 11, 20, 0.80);
-  --glass-save-strip: rgba(17, 17, 32, 0.92);
+  --blur:             20px;
+  --glass-header:     rgba(11, 11, 20, 0.68);
+  --glass-sidebar:    rgba(17, 17, 32, 0.74);
+  --glass-panel-hdr:  rgba(11, 11, 20, 0.62);
+  --glass-save-strip: rgba(17, 17, 32, 0.78);
+  --glass-card:       rgba(17, 17, 32, 0.68);
 }
 
 /* ─── Light Theme ────────────────────────────────────────────────────────── */
@@ -62,10 +63,11 @@
   --shadow:    0 3px 8px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
   --shadow-lg: 0 10px 24px rgba(0,0,0,.08), 0 4px 8px rgba(0,0,0,.05);
   --shadow-xl: 0 20px 48px rgba(0,0,0,.10);
-  --glass-header:     rgba(242, 242, 250, 0.82);
-  --glass-sidebar:    rgba(255, 255, 255, 0.88);
-  --glass-panel-hdr:  rgba(242, 242, 250, 0.80);
-  --glass-save-strip: rgba(255, 255, 255, 0.92);
+  --glass-header:     rgba(242, 242, 250, 0.68);
+  --glass-sidebar:    rgba(255, 255, 255, 0.74);
+  --glass-panel-hdr:  rgba(242, 242, 250, 0.62);
+  --glass-save-strip: rgba(255, 255, 255, 0.78);
+  --glass-card:       rgba(255, 255, 255, 0.68);
 }
 
 /* ─── System Light ───────────────────────────────────────────────────────── */
@@ -88,10 +90,11 @@
     --shadow:    0 3px 8px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
     --shadow-lg: 0 10px 24px rgba(0,0,0,.08), 0 4px 8px rgba(0,0,0,.05);
     --shadow-xl: 0 20px 48px rgba(0,0,0,.10);
-    --glass-header:     rgba(242, 242, 250, 0.82);
-    --glass-sidebar:    rgba(255, 255, 255, 0.88);
-    --glass-panel-hdr:  rgba(242, 242, 250, 0.80);
-    --glass-save-strip: rgba(255, 255, 255, 0.92);
+    --glass-header:     rgba(242, 242, 250, 0.68);
+    --glass-sidebar:    rgba(255, 255, 255, 0.74);
+    --glass-panel-hdr:  rgba(242, 242, 250, 0.62);
+    --glass-save-strip: rgba(255, 255, 255, 0.78);
+    --glass-card:       rgba(255, 255, 255, 0.68);
   }
 }
 
@@ -118,16 +121,17 @@
   --glass-sidebar:    var(--color-surface);
   --glass-panel-hdr:  var(--color-bg);
   --glass-save-strip: var(--color-surface);
+  --glass-card:       var(--color-surface);
 }
 [data-effects="classic"] .panel-sticky-header {
   border-bottom-color: transparent;
 }
-/* Reduced: shorter durations, smaller blur */
+/* Reduced: shorter durations, smaller blur — slightly less extreme than Full */
 [data-effects="reduced"] {
   --t-fast:   60ms ease;
   --t-normal: 110ms ease;
   --t-slow:   190ms ease;
-  --blur:     6px;
+  --blur:     10px;
 }
 /* Minimal: near-zero durations, no blur */
 [data-effects="minimal"] {
@@ -139,6 +143,7 @@
   --glass-sidebar:    var(--color-surface);
   --glass-panel-hdr:  var(--color-bg);
   --glass-save-strip: var(--color-surface);
+  --glass-card:       var(--color-surface);
 }
 /* !important is required here: these rules must override any inline or
    component-scoped durations set elsewhere. This is the standard approach
@@ -745,9 +750,9 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 
   .mobile-nav {
     display: flex;
-    background: var(--color-surface);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--glass-card);
+    backdrop-filter: blur(var(--blur));
+    -webkit-backdrop-filter: blur(var(--blur));
     border-top: 1px solid var(--color-border);
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
   }
@@ -781,7 +786,9 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
   display: flex; align-items: center; justify-content: space-between;
   padding: 0.6rem var(--sp-3);
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface-2);
+  background: var(--glass-card);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
 }
 .download-queue-title {
   display: flex; align-items: center; gap: 0.4rem;
@@ -857,7 +864,9 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .dl-status-bar {
   flex-shrink: 0;
   border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: var(--glass-card);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   transition: background var(--t-slow), border-color var(--t-slow);
   z-index: 100;
 }

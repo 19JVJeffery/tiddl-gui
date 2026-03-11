@@ -42,6 +42,9 @@ const QUALITY_LABELS = {
   LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",
 };
 
+/** Quality tiers ordered from highest to lowest, used to find the best quality in a collection. */
+const QUALITY_ORDER = ["HI_RES_LOSSLESS", "LOSSLESS", "HIGH", "LOW"];
+
 /** Returns HTML for a small quality pill, or empty string when quality is unknown. */
 function qualityPill(quality) {
   if (!quality || !QUALITY_LABELS[quality]) return "";
@@ -1311,7 +1314,10 @@ async function navigateToDetail(type, id, title, sub, cover, fromTab) {
         : `<div class="detail-cover placeholder${round ? " round" : ""}"></div>`}
     </div>
     <div class="detail-header-info">
-      <span class="detail-type-badge">${escHtml(typeLabel)}</span>
+      <div class="detail-type-row">
+        <span class="detail-type-badge">${escHtml(typeLabel)}</span>
+        <span id="detail-header-quality"></span>
+      </div>
       <h2 class="detail-title">${escHtml(title)}</h2>
       <p class="detail-sub" id="detail-sub">${escHtml(sub)}</p>
       <div class="detail-actions">
@@ -1431,6 +1437,10 @@ async function renderAlbumDetail(albumId, body) {
     subEl.appendChild(btn);
   }
 
+  // Update the detail header quality pill with the album's max quality
+  const headerQualityEl = $("detail-header-quality");
+  if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(albumMeta.audioQuality);
+
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
     const coverArt = coverUrl(albumMeta.cover);
@@ -1479,6 +1489,11 @@ async function renderPlaylistDetail(playlistId, body) {
     getAllPlaylistItems(playlistId),
   ]);
   const tracks = (allItems || []).filter((i) => i.type === "track").map((i) => i.item);
+
+  // Update the detail header quality pill with the playlist's highest available track quality
+  const maxPlaylistQuality = QUALITY_ORDER.find((q) => tracks.some((t) => t.audioQuality === q)) || null;
+  const headerQualityEl = $("detail-header-quality");
+  if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(maxPlaylistQuality);
 
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));

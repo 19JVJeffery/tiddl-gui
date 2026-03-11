@@ -88,30 +88,12 @@
 
       <div class="dl-quality-row">
         <div class="quality-picker-wrap">
-          <label class="field-label">Quality</label>
-          <div class="quality-picker" id="quality-picker" role="group" aria-label="Quality">
-            <button class="quality-opt" data-q="LOW">
-              <span class="quality-pill-sm" data-quality="LOW">Low</span>
-              <span class="quality-opt-detail">96 kbps &middot; M4A</span>
-            </button>
-            <button class="quality-opt active" data-q="HIGH">
-              <span class="quality-pill-sm" data-quality="HIGH">High</span>
-              <span class="quality-opt-detail">320 kbps &middot; M4A</span>
-            </button>
-            <button class="quality-opt" data-q="LOSSLESS">
-              <span class="quality-pill-sm" data-quality="LOSSLESS">HiFi</span>
-              <span class="quality-opt-detail">FLAC 16-bit</span>
-            </button>
-            <button class="quality-opt" data-q="HI_RES_LOSSLESS">
-              <span class="quality-pill-sm" data-quality="HI_RES_LOSSLESS">Max</span>
-              <span class="quality-opt-detail">FLAC 24-bit</span>
-            </button>
-          </div>
-          <select id="quality-select" style="display:none">
-            <option value="LOW">Low</option>
-            <option value="HIGH" selected>High</option>
-            <option value="LOSSLESS">Lossless</option>
-            <option value="HI_RES_LOSSLESS">Max</option>
+          <label class="field-label" for="quality-select">Quality</label>
+          <select id="quality-select" class="quality-select-dl" title="Download quality. In normal mode, applies to all queued items. In Advanced mode (Settings), set quality per item.">
+            <option value="LOW">Low — 96 kbps · M4A</option>
+            <option value="HIGH" selected>High — 320 kbps · M4A</option>
+            <option value="LOSSLESS">HiFi — FLAC 16-bit</option>
+            <option value="HI_RES_LOSSLESS">Max — FLAC 24-bit</option>
           </select>
         </div>
         <button id="btn-download" class="btn-primary btn-download-main">
@@ -222,10 +204,20 @@
           Library
         </h2>
 
-        <div class="search-type-pills" id="library-section-pills" style="margin-bottom:var(--sp-4)">
-          <button class="type-pill active" data-section="tracks">Tracks</button>
-          <button class="type-pill" data-section="albums">Albums</button>
-          <button class="type-pill" data-section="playlists">Playlists</button>
+        <div class="library-controls-row">
+          <div class="search-type-pills" id="library-section-pills">
+            <button class="type-pill active" data-section="tracks">Tracks</button>
+            <button class="type-pill" data-section="albums">Albums</button>
+            <button class="type-pill" data-section="playlists">Playlists</button>
+          </div>
+          <div class="library-filter-wrap">
+            <div class="search-input-wrap">
+              <input id="library-filter-input" type="text" placeholder="Filter…" autocomplete="off" title="Filter items in the current library section" />
+              <button id="btn-clear-library-filter" class="btn-clear-search hidden" aria-label="Clear filter">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div><!-- .panel-sticky-header -->
 
@@ -254,7 +246,58 @@
     <!-- Auth panel -->
     <section id="panel-auth" class="tab-panel hidden">
       <div class="panel-scroll-body">
-        <div class="auth-page">
+        <!-- Logged-in view (shown when authenticated) -->
+        <div id="auth-logged-in" class="auth-page hidden">
+          <div class="auth-hero">
+            <div class="auth-hero-icon">
+              <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            </div>
+            <h1 class="auth-hero-title">tiddl-gui</h1>
+          </div>
+
+          <div class="auth-card auth-account-card">
+            <div class="auth-account-status-row">
+              <div class="auth-account-avatar">
+                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div class="auth-account-info">
+                <span id="auth-account-username" class="auth-account-name">Loading…</span>
+                <span class="auth-account-status">
+                  <svg width="10" height="10" fill="var(--color-accent)" viewBox="0 0 10 10"><circle cx="5" cy="5" r="5"/></svg>
+                  Connected to Tidal
+                </span>
+              </div>
+            </div>
+            <div class="auth-account-actions">
+              <button class="btn-primary" id="btn-go-library-from-auth">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><rect x="2" y="3" width="4" height="18"/><rect x="9" y="3" width="4" height="18"/><path d="M16 3l5 2v14l-5 2V3z"/></svg>
+                Open Library
+              </button>
+              <button class="btn-secondary" id="btn-go-download-from-auth">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><path d="M12 3v13m0 0-4-4m4 4 4-4"/></svg>
+                Start Downloading
+              </button>
+            </div>
+            <button id="btn-logout-account" class="btn-ghost auth-logout-btn">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-1px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+              Sign out
+            </button>
+          </div>
+
+          <div class="auth-features">
+            <div class="auth-feature">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <span>Tokens stored locally &mdash; never leave your device</span>
+            </div>
+            <div class="auth-feature">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              <span>Lossless &amp; Max quality downloads</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Login view (shown when not authenticated) -->
+        <div id="auth-login-view" class="auth-page">
           <div class="auth-hero">
             <div class="auth-hero-icon">
               <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
@@ -348,7 +391,7 @@
           <div class="settings-grid">
             <div class="field-group">
               <label class="field-label" for="setting-track-quality">Default Track Quality</label>
-              <select id="setting-track-quality">
+              <select id="setting-track-quality" title="Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi/Max Tidal subscription.">
                 <option value="LOW">Low &mdash; 96 kbps .m4a</option>
                 <option value="HIGH">High &mdash; 320 kbps .m4a</option>
                 <option value="LOSSLESS">Lossless &mdash; FLAC 16-bit</option>
@@ -357,7 +400,7 @@
             </div>
             <div class="field-group">
               <label class="field-label" for="setting-video-quality">Video Quality</label>
-              <select id="setting-video-quality">
+              <select id="setting-video-quality" title="SD=360p · HD=720p · Full HD=1080p. Higher resolutions use more storage.">
                 <option value="sd">SD &mdash; 360p</option>
                 <option value="hd">HD &mdash; 720p</option>
                 <option value="fhd">Full HD &mdash; 1080p</option>
@@ -365,11 +408,11 @@
             </div>
             <div class="field-group">
               <label class="field-label" for="setting-threads">Parallel Downloads</label>
-              <input id="setting-threads" type="number" min="1" max="20" value="4" />
+              <input id="setting-threads" type="number" min="1" max="20" value="4" title="Number of tracks downloaded at the same time. 4 is a good default. Very high values may trigger API rate limits." />
             </div>
             <div class="field-group">
               <label class="field-label" for="setting-singles-filter">Singles Filter</label>
-              <select id="setting-singles-filter">
+              <select id="setting-singles-filter" title="None=full albums only · Only=singles &amp; EPs only · Include=albums plus singles &amp; EPs">
                 <option value="none">None &mdash; full albums only</option>
                 <option value="only">Only &mdash; singles only</option>
                 <option value="include">Include &mdash; albums + singles</option>
@@ -377,7 +420,7 @@
             </div>
             <div class="field-group">
               <label class="field-label" for="setting-videos-filter">Videos Filter</label>
-              <select id="setting-videos-filter">
+              <select id="setting-videos-filter" title="None=skip videos · Only=videos only · Allow=tracks plus videos">
                 <option value="none">None &mdash; skip videos</option>
                 <option value="only">Only &mdash; videos only</option>
                 <option value="allow">Allow &mdash; tracks + videos</option>
@@ -385,10 +428,10 @@
             </div>
           </div>
           <div class="checkbox-group">
-            <label class="checkbox-label"><input type="checkbox" id="setting-skip-existing" checked /><span>Skip already-downloaded files</span></label>
-            <label class="checkbox-label"><input type="checkbox" id="setting-update-mtime" /><span>Update modification time of existing files</span></label>
-            <label class="checkbox-label"><input type="checkbox" id="setting-rewrite-metadata" /><span>Rewrite metadata for already-downloaded files</span></label>
-            <label class="checkbox-label"><input type="checkbox" id="setting-advanced-mode" /><span>Advanced mode &mdash; set quality per-item in the download queue</span></label>
+            <label class="checkbox-label" title="Skip files that have already been downloaded to avoid re-downloading. Matched by filename."><input type="checkbox" id="setting-skip-existing" checked /><span>Skip already-downloaded files</span></label>
+            <label class="checkbox-label" title="Update the file modification timestamp on already-downloaded files when they are skipped."><input type="checkbox" id="setting-update-mtime" /><span>Update modification time of existing files</span></label>
+            <label class="checkbox-label" title="Re-embed metadata tags into files that already exist, even if the audio was skipped."><input type="checkbox" id="setting-rewrite-metadata" /><span>Rewrite metadata for already-downloaded files</span></label>
+            <label class="checkbox-label" title="Enables a per-item quality selector in the download queue. The main quality selector becomes an 'override all' control."><input type="checkbox" id="setting-advanced-mode" /><span>Advanced mode &mdash; set quality per-item in the download queue</span></label>
           </div>
         </div>
 
@@ -427,10 +470,10 @@
             Metadata
           </h3>
           <div class="checkbox-group">
-            <label class="checkbox-label"><input type="checkbox" id="setting-meta-enable" checked /><span>Embed metadata in downloaded files</span></label>
-            <label class="checkbox-label"><input type="checkbox" id="setting-meta-lyrics" /><span>Embed lyrics in metadata</span></label>
-            <label class="checkbox-label"><input type="checkbox" id="setting-meta-cover" /><span>Embed album cover in track file</span></label>
-            <label class="checkbox-label"><input type="checkbox" id="setting-meta-album-review" /><span>Embed album review in COMMENT field</span></label>
+            <label class="checkbox-label" title="Embed ID3/FLAC tags (title, artist, album, track number, etc.) into downloaded files."><input type="checkbox" id="setting-meta-enable" checked /><span>Embed metadata in downloaded files</span></label>
+            <label class="checkbox-label" title="Fetch and embed synced or unsynced lyrics from Tidal into the file tags."><input type="checkbox" id="setting-meta-lyrics" /><span>Embed lyrics in metadata</span></label>
+            <label class="checkbox-label" title="Embed the album cover art directly inside the downloaded audio file (increases file size)."><input type="checkbox" id="setting-meta-cover" /><span>Embed album cover in track file</span></label>
+            <label class="checkbox-label" title="Store the Tidal album review text in the COMMENT metadata field."><input type="checkbox" id="setting-meta-album-review" /><span>Embed album review in COMMENT field</span></label>
           </div>
         </div>
 
@@ -535,66 +578,129 @@
           Help
         </h2>
       </div><!-- .panel-sticky-header -->
-      <div class="panel-scroll-body">
+      <div class="help-layout">
+        <nav class="help-sidenav">
+          <button class="help-nav-btn active" data-section="login">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Sign in
+          </button>
+          <button class="help-nav-btn" data-section="download">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 3v13m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+            Download
+          </button>
+          <button class="help-nav-btn" data-section="search">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            Search
+          </button>
+          <button class="help-nav-btn" data-section="library">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="4" height="18"/><rect x="9" y="3" width="4" height="18"/><path d="M16 3l5 2v14l-5 2V3z"/></svg>
+            Library
+          </button>
+          <button class="help-nav-btn" data-section="quality">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            Quality
+          </button>
+          <button class="help-nav-btn" data-section="settings">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            Settings
+          </button>
+          <button class="help-nav-btn" data-section="cors">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74"/><path d="M21 3v9h-9"/></svg>
+            CORS Proxy
+          </button>
+          <button class="help-nav-btn" data-section="run-locally">
+            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Run Locally
+          </button>
+        </nav>
 
-        <div class="help-section">
-          <h3>1 &mdash; Log in</h3>
-          <p>Open the <strong>Account</strong> tab and click <strong>Login with Tidal</strong>. A Tidal authorisation page opens in a new tab &mdash; approve it there, then return. The app polls automatically and logs you in. Your token is stored in <code>localStorage</code> and refreshed automatically; nothing is ever sent to a third-party server.</p>
-        </div>
+        <div class="help-body panel-scroll-body">
 
-        <div class="help-section">
-          <h3>2 &mdash; Download</h3>
-          <p>Open the <strong>Download</strong> tab. Type or paste Tidal URLs into the input box and press <kbd>Enter</kbd> to add each one as a pill. Paste a whole list of URLs (one per line) and they all get added at once. Use <strong>Import file</strong> to load a <code>.txt</code> file of URLs.</p>
-          <div class="help-table-wrap">
-            <table class="help-table">
-              <thead><tr><th>Input</th><th>Example</th></tr></thead>
-              <tbody>
-                <tr><td>Full URL</td><td><code>https://tidal.com/browse/track/103805726</code></td></tr>
-                <tr><td>Track</td><td><code>track/103805726</code></td></tr>
-                <tr><td>Album</td><td><code>album/103805723</code></td></tr>
-                <tr><td>Playlist</td><td><code>playlist/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code></td></tr>
-                <tr><td>Mix</td><td><code>mix/0123456789abcdef</code></td></tr>
-              </tbody>
-            </table>
+          <div class="help-section active" id="help-login">
+            <h3>Sign in to Tidal</h3>
+            <p>Open the <strong>Account</strong> tab and click <strong>Login with Tidal</strong>. A Tidal authorisation page opens in a new tab &mdash; approve it there, then return. The app polls automatically and logs you in.</p>
+            <p>Your token is stored in <code>localStorage</code> and refreshed automatically; nothing is ever sent to a third-party server.</p>
+            <p>Once logged in, the Account tab will show your username and a green <em>Connected to Tidal</em> indicator. You can sign out at any time from the Account tab or the header.</p>
           </div>
-          <div class="help-table-wrap">
-            <table class="help-table">
-              <thead><tr><th>Quality</th><th>Format</th><th>Bitrate</th></tr></thead>
-              <tbody>
-                <tr><td><span class="quality-pill-sm" data-quality="LOW">Low</span></td><td>.m4a</td><td>96 kbps</td></tr>
-                <tr><td><span class="quality-pill-sm" data-quality="HIGH">High</span></td><td>.m4a</td><td>320 kbps</td></tr>
-                <tr><td><span class="quality-pill-sm" data-quality="LOSSLESS">HiFi</span></td><td>.flac</td><td>16-bit 44.1 kHz</td></tr>
-                <tr><td><span class="quality-pill-sm" data-quality="HI_RES_LOSSLESS">Max</span></td><td>.flac</td><td>Up to 24-bit 192 kHz</td></tr>
-              </tbody>
-            </table>
+
+          <div class="help-section" id="help-download">
+            <h3>Download tracks, albums &amp; playlists</h3>
+            <p>Open the <strong>Download</strong> tab. Type or paste Tidal URLs into the input box and press <kbd>Enter</kbd> to add each one as a pill. Paste a whole list of URLs (one per line) and they all get added at once. Use <strong>Import file</strong> to load a <code>.txt</code> file of URLs.</p>
+            <div class="help-table-wrap">
+              <table class="help-table">
+                <thead><tr><th>Input type</th><th>Example</th></tr></thead>
+                <tbody>
+                  <tr><td>Full URL</td><td><code>https://tidal.com/browse/track/103805726</code></td></tr>
+                  <tr><td>Track</td><td><code>track/103805726</code></td></tr>
+                  <tr><td>Album</td><td><code>album/103805723</code></td></tr>
+                  <tr><td>Playlist</td><td><code>playlist/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code></td></tr>
+                  <tr><td>Mix</td><td><code>mix/0123456789abcdef</code></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p>Select your desired quality from the <strong>Quality</strong> dropdown, then click <strong>Download</strong>. In normal mode the quality applies to all items in the queue. Enable <strong>Advanced mode</strong> in Settings to set quality per item.</p>
+            <p class="help-note">HiFi / Max requires an eligible Tidal subscription. Encrypted (DRM) streams cannot be saved in the browser.</p>
           </div>
-          <p class="help-note">HiFi / Max requires an eligible Tidal subscription. Encrypted (DRM) streams cannot be saved in the browser.</p>
-        </div>
 
-        <div class="help-section">
-          <h3>3 &mdash; Search</h3>
-          <p>Click a <strong>track</strong> result to add it to the download queue. Click an <strong>artist</strong>, <strong>album</strong>, or <strong>playlist</strong> card to open a detail page where you can browse contents and download individual items or everything at once. Use the <strong>&#x2295;</strong> button on a card to queue the whole item without navigating away.</p>
-        </div>
+          <div class="help-section" id="help-search">
+            <h3>Search Tidal</h3>
+            <p>Click a <strong>track</strong> result to add it to the download queue. Click an <strong>artist</strong>, <strong>album</strong>, or <strong>playlist</strong> card to open a detail page where you can browse contents and download individual items or everything at once. Use the <strong>&#x2295;</strong> button on a card to queue the whole item without navigating away.</p>
+            <p>Use the type filter tabs (<em>All, Tracks, Albums, Artists, Playlists</em>) to narrow results. Clicking a tab when results are already showing re-filters instantly; clicking with a query typed but not yet searched will trigger the search automatically.</p>
+            <p>Your recent searches are saved and shown as suggestions when you focus the search box.</p>
+          </div>
 
-        <div class="help-section">
-          <h3>4 &mdash; Library</h3>
-          <p>Shows your saved Tidal tracks, albums, and playlists. Click any item to add it to the queue or open its detail page.</p>
-        </div>
+          <div class="help-section" id="help-library">
+            <h3>Your Library</h3>
+            <p>Shows your saved Tidal tracks, albums, and playlists. Click any item to add it to the queue or open its detail page. Use the <strong>Tracks / Albums / Playlists</strong> tabs to switch sections. Use the filter box to quickly find items by name within the current section.</p>
+            <p>The library requires you to be signed in. It loads on demand and caches within the session.</p>
+          </div>
 
-        <div class="help-section">
-          <h3>5 &mdash; CORS proxy</h3>
-          <p>Tidal's API blocks direct browser requests. All API calls go through a CORS proxy. The default (<a href="https://corsproxy.io" target="_blank" rel="noopener">corsproxy.io</a>) works out of the box and requires no setup. To use a different proxy, open <strong>Settings &rarr; Advanced / Developer</strong>.</p>
-        </div>
+          <div class="help-section" id="help-quality">
+            <h3>Quality tiers</h3>
+            <div class="help-table-wrap">
+              <table class="help-table">
+                <thead><tr><th>Quality</th><th>Format</th><th>Bitrate / Detail</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="quality-pill-sm" data-quality="LOW">Low</span></td><td>.m4a (AAC)</td><td>96 kbps</td></tr>
+                  <tr><td><span class="quality-pill-sm" data-quality="HIGH">High</span></td><td>.m4a (AAC)</td><td>320 kbps</td></tr>
+                  <tr><td><span class="quality-pill-sm" data-quality="LOSSLESS">HiFi</span></td><td>.flac</td><td>16-bit 44.1 kHz lossless</td></tr>
+                  <tr><td><span class="quality-pill-sm" data-quality="HI_RES_LOSSLESS">Max</span></td><td>.flac</td><td>Up to 24-bit 192 kHz</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="help-note">HiFi / Max requires an eligible Tidal HiFi or HiFi Plus subscription. Encrypted (DRM) streams cannot be saved in the browser.</p>
+            <p>The <strong>Quality</strong> dropdown on the Download tab applies to all items in the queue (normal mode). Enable <strong>Advanced mode</strong> (Settings &rarr; Download) to set quality individually per item. Changing the main quality in advanced mode will prompt you to apply it to all items.</p>
+          </div>
 
-        <div class="help-section">
-          <h3>Run locally</h3>
-          <pre class="help-code">git clone https://github.com/19JVJeffery/tiddl-gui.git
+          <div class="help-section" id="help-settings">
+            <h3>Settings reference</h3>
+            <p><strong>Appearance</strong> &mdash; Theme (Dark / Light / System) and accent colour.</p>
+            <p><strong>Default Track Quality</strong> &mdash; The quality tier used for new downloads. Changes here sync to the Download tab.</p>
+            <p><strong>Parallel Downloads</strong> &mdash; How many tracks are fetched simultaneously (default: 4). Very high values may hit Tidal API rate limits.</p>
+            <p><strong>Skip already-downloaded files</strong> &mdash; Avoids re-downloading files that already exist, matched by filename.</p>
+            <p><strong>Advanced mode</strong> &mdash; Adds a per-item quality selector in the download queue. The main quality selector becomes an "override all" control with a confirmation prompt.</p>
+            <p><strong>File Path Templates</strong> &mdash; Customise the folder and file names of downloaded files using token chips (e.g. <code>{album.artist}</code>, <code>{item.title}</code>). Use <code>/</code> for subdirectories.</p>
+            <p><strong>Metadata</strong> &mdash; Controls what tags are embedded in downloaded files (lyrics, cover art, album review).</p>
+            <p><strong>Cover Art</strong> &mdash; Optionally save the cover image as a separate file alongside downloads.</p>
+            <p><strong>M3U Playlists</strong> &mdash; Generate <code>.m3u</code> playlist files alongside album and playlist downloads.</p>
+          </div>
+
+          <div class="help-section" id="help-cors">
+            <h3>CORS proxy</h3>
+            <p>Tidal's API blocks direct browser requests. All API calls go through a CORS proxy. The default (<a href="https://corsproxy.io" target="_blank" rel="noopener">corsproxy.io</a>) works out of the box and requires no setup.</p>
+            <p>To use a different proxy, open <strong>Settings &rarr; Advanced / Developer</strong> and enter the prefix URL. The proxy must support arbitrary URL-encoded targets.</p>
+          </div>
+
+          <div class="help-section" id="help-run-locally">
+            <h3>Run locally</h3>
+            <pre class="help-code">git clone https://github.com/19JVJeffery/tiddl-gui.git
 cd tiddl-gui
 python3 -m http.server 8080 --directory web</pre>
-          <p>Then open <a href="http://localhost:8080" target="_blank">http://localhost:8080</a>. Any static file server works.</p>
-        </div>
+            <p>Then open <a href="http://localhost:8080" target="_blank">http://localhost:8080</a>. Any static file server works &mdash; <code>npx serve web</code>, Live Server, etc. No build step is required.</p>
+          </div>
 
-      </div><!-- .panel-scroll-body -->
+        </div><!-- .help-body -->
+      </div><!-- .help-layout -->
     </section>
 
   </main>

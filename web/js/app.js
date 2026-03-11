@@ -21,7 +21,7 @@ import {
   downloadPlaylist, downloadMix, downloadArtistAlbums,
 } from "./download.js";
 import {
-  getTheme, getAccentColor, getTrackQuality, getAdvancedMode,
+  getTheme, getAccentColor, getTrackQuality, setTrackQuality, getAdvancedMode,
   loadSearchHistory, saveToSearchHistory, clearSearchHistory,
 } from "./config.js";
 import {
@@ -189,16 +189,28 @@ function backFromDetail() {
 function updateAuthBadge() {
   const badge = $("auth-badge");
   const logoutBtn = $("btn-logout");
+  const loggedInView = $("auth-logged-in");
+  const loginView = $("auth-login-view");
   if (!badge) return;
   if (isLoggedIn()) {
     const auth = loadAuth();
-    badge.textContent = auth?.username || "Logged in";
+    const username = auth?.username || "Logged in";
+    badge.textContent = username;
     badge.className = "auth-badge auth-badge--in";
     show(logoutBtn);
+    // Show logged-in view on Account tab
+    if (loggedInView) {
+      show(loggedInView);
+      const nameEl = $("auth-account-username");
+      if (nameEl) nameEl.textContent = username;
+    }
+    if (loginView) hide(loginView);
   } else {
     badge.textContent = "Not logged in";
     badge.className = "auth-badge auth-badge--out";
     hide(logoutBtn);
+    if (loggedInView) hide(loggedInView);
+    if (loginView) show(loginView);
   }
 }
 
@@ -285,25 +297,31 @@ function getSelectedQuality() {
   return $("quality-select")?.value || "HIGH";
 }
 
-function initQualityPicker() {
-  const picker = $("quality-picker");
+function syncQualityPicker() {
   const select = $("quality-select");
-  if (!picker || !select) return;
+  if (!select) return;
+  select.value = getTrackQuality();
+}
 
-  const saved = getTrackQuality();
-  select.value = saved;
-  picker.querySelectorAll(".quality-opt").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.q === saved);
-  });
+function initQualityPicker() {
+  const select = $("quality-select");
+  if (!select) return;
 
-  picker.querySelectorAll(".quality-opt").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const q = btn.dataset.q;
-      select.value = q;
-      picker.querySelectorAll(".quality-opt").forEach((b) =>
-        b.classList.toggle("active", b.dataset.q === q)
-      );
-    });
+  select.value = getTrackQuality();
+
+  select.addEventListener("change", () => {
+    const q = select.value;
+    setTrackQuality(q);
+    const advanced = getAdvancedMode();
+    if (advanced && downloadQueue.length > 0) {
+      if (confirm(`Apply "${QUALITY_LABELS[q]}" quality to all ${downloadQueue.length} item(s) in queue?`)) {
+        downloadQueue.forEach((item) => { item.quality = q; });
+        renderQueue();
+      }
+    } else {
+      // Normal mode: quality is read dynamically from the select for all items
+      renderQueue();
+    }
   });
 }
 
@@ -385,7 +403,13 @@ function addToQueue(item) {
     (q) => q.type === item.type && String(q.id) === String(item.id)
   );
   if (exists) return false;
-  item.quality = item.quality || getSelectedQuality();
+  // In advanced mode, set quality on the item so it can be overridden per-item.
+  // In normal mode, leave quality unset so the global selector always applies.
+  if (getAdvancedMode()) {
+    item.quality = item.quality || getSelectedQuality();
+  } else {
+    item.quality = undefined;
+  }
   downloadQueue.push(item);
   renderQueue();
   return true;
@@ -1117,6 +1141,7 @@ async function renderPlaylistDetail(playlistId, body) {
 let _librarySection  = "tracks";
 let _libraryLoaded   = { tracks: false, albums: false, playlists: false };
 let _libraryData     = { tracks: [], albums: [], playlists: [] };
+let _libraryFilter   = "";
 
 async function loadLibraryIfNeeded() {
   if (!isLoggedIn()) {
@@ -1185,8 +1210,23 @@ function renderLibraryContent(items) {
     return;
   }
 
+  // Apply filter
+  const filterTerm = _libraryFilter.toLowerCase().trim();
+  const filtered = filterTerm
+    ? items.filter((item) => {
+        const title = (item.title || item.name || "").toLowerCase();
+        const artist = (item.artist?.name || item.creator?.name || "").toLowerCase();
+        return title.includes(filterTerm) || artist.includes(filterTerm);
+      })
+    : items;
+
+  if (!filtered.length) {
+    content.innerHTML = `<p class="no-results">No results for &ldquo;${escHtml(_libraryFilter)}&rdquo;.</p>`;
+    return;
+  }
+
   if (_librarySection === "tracks") {
-    content.innerHTML = `<div class="library-track-list">${items.map((t) => {
+    content.innerHTML = `<div class="library-track-list">${filtered.map((t) => {
       const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
       const cover = coverUrl(t.album?.cover, 80);
       return `<div class="library-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
@@ -1226,7 +1266,7 @@ function renderLibraryContent(items) {
     // Albums / playlists: card grid
     const type = _librarySection === "albums" ? "album" : "playlist";
     let html = `<div class="result-grid">`;
-    for (const item of items) {
+    for (const item of filtered) {
       const id    = type === "album" ? item.id : (item.uuid || item.id);
       const title = item.title || item.name || "";
       const sub   = type === "album" ? (item.artist?.name || "") : (item.creator?.name || "Tidal");
@@ -1262,8 +1302,8 @@ function handleSaveSettings() {
   saveSettingsForm(appendLog);
   // Re-render queue in case advanced mode changed
   renderQueue();
-  // Sync quality picker with saved setting
-  initQualityPicker();
+  // Sync quality picker with saved setting (without re-attaching event listeners)
+  syncQualityPicker();
   const msg = $("settings-save-msg");
   if (msg) {
     msg.classList.add("visible");
@@ -1362,7 +1402,7 @@ export function init() {
   });
   $("btn-go-downloads")?.addEventListener("click", () => activateTab("download"));
 
-  // Search type pills
+  // Search type pills — also trigger search if query is present but no results yet
   document.querySelectorAll(".type-pill").forEach((pill) => {
     if (!pill.closest("#search-type-pills")) return;
     pill.addEventListener("click", () => {
@@ -1370,7 +1410,11 @@ export function init() {
       document.querySelectorAll("#search-type-pills .type-pill").forEach((p) =>
         p.classList.toggle("active", p.dataset.type === activeTypeFilter)
       );
-      if (lastSearchData) renderSearchResults(lastSearchData, activeTypeFilter);
+      if (lastSearchData) {
+        renderSearchResults(lastSearchData, activeTypeFilter);
+      } else if ($("search-input")?.value?.trim()) {
+        handleSearch();
+      }
     });
   });
 
@@ -1378,10 +1422,54 @@ export function init() {
   document.querySelectorAll("#library-section-pills .type-pill").forEach((pill) => {
     pill.addEventListener("click", () => {
       _librarySection = pill.dataset.section;
+      _libraryFilter = "";
+      const filterInput = $("library-filter-input");
+      if (filterInput) { filterInput.value = ""; }
+      hide($("btn-clear-library-filter"));
       document.querySelectorAll("#library-section-pills .type-pill").forEach((p) =>
         p.classList.toggle("active", p.dataset.section === _librarySection)
       );
       loadLibraryIfNeeded();
+    });
+  });
+
+  // Library filter input
+  const libraryFilterInput = $("library-filter-input");
+  const btnClearLibFilter  = $("btn-clear-library-filter");
+  libraryFilterInput?.addEventListener("input", () => {
+    _libraryFilter = libraryFilterInput.value;
+    btnClearLibFilter?.classList.toggle("hidden", !libraryFilterInput.value);
+    if (_libraryLoaded[_librarySection]) {
+      renderLibraryContent(_libraryData[_librarySection]);
+    }
+  });
+  btnClearLibFilter?.addEventListener("click", () => {
+    libraryFilterInput.value = "";
+    _libraryFilter = "";
+    hide(btnClearLibFilter);
+    if (_libraryLoaded[_librarySection]) {
+      renderLibraryContent(_libraryData[_librarySection]);
+    }
+  });
+
+  // Account page logged-in buttons
+  $("btn-go-library-from-auth")?.addEventListener("click", () => {
+    activateTab("library");
+    loadLibraryIfNeeded();
+  });
+  $("btn-go-download-from-auth")?.addEventListener("click", () => activateTab("download"));
+  $("btn-logout-account")?.addEventListener("click", handleLogout);
+
+  // Help page side nav
+  document.querySelectorAll(".help-nav-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const sectionId = btn.dataset.section;
+      document.querySelectorAll(".help-nav-btn").forEach((b) =>
+        b.classList.toggle("active", b.dataset.section === sectionId)
+      );
+      document.querySelectorAll(".help-section").forEach((s) =>
+        s.classList.toggle("active", s.id === `help-${sectionId}`)
+      );
     });
   });
 

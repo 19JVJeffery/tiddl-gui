@@ -44,20 +44,41 @@ function _resolveEffectiveTheme() {
 function _updateBrowserChrome() {
   const rawAccent = getAccentColor();
   const isDark    = _resolveEffectiveTheme() === "dark";
-  const bg        = isDark ? "#111120" : "#f2f2fa";
+  // Body background colour used for the favicon tile (matches --color-bg)
+  const faviconBg = isDark ? "#111120" : "#f2f2fa";
 
   // Sanitize: only allow valid 3- or 6-digit hex colours before interpolating into SVG
-  const safeAccent = /^#[0-9a-fA-F]{3,6}$/.test(rawAccent) ? rawAccent : "#4fd08c";
-  const safeBg     = /^#[0-9a-fA-F]{3,6}$/.test(bg)        ? bg        : "#111120";
+  const safeAccent    = /^#[0-9a-fA-F]{3,6}$/.test(rawAccent)  ? rawAccent  : "#4fd08c";
+  const safeFaviconBg = /^#[0-9a-fA-F]{3,6}$/.test(faviconBg)  ? faviconBg  : "#111120";
 
   // SVG favicon: rounded square + bold "t" in accent colour
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="${safeBg}"/><text x="16" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="22" fill="${safeAccent}">t</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="${safeFaviconBg}"/><text x="16" y="24" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-weight="800" font-size="22" fill="${safeAccent}">t</text></svg>`;
   const faviconEl = document.getElementById("favicon-link");
   if (faviconEl) faviconEl.href = `data:image/svg+xml,${encodeURIComponent(svg)}`;
 
-  // Safari / Chrome tab bar colour
-  const metaEl = document.getElementById("theme-color-meta");
-  if (metaEl) metaEl.setAttribute("content", safeBg);
+  // Safari / Chrome toolbar colour — use the header's surface colour (--color-surface),
+  // not the body background, so the toolbar matches the actual header element.
+  // Read the computed CSS variable for the currently-active theme; fall back to
+  // known defaults for the opposite scheme (can't read both at once via getComputedStyle).
+  const computedSurface = getComputedStyle(document.documentElement)
+    .getPropertyValue("--color-surface").trim();
+  const currentSurface = /^#[0-9a-fA-F]{3,6}$/.test(computedSurface)
+    ? computedSurface
+    : (isDark ? "#111120" : "#ffffff");
+  const darkSurface  = isDark ? currentSurface : "#111120";
+  const lightSurface = isDark ? "#ffffff" : currentSurface;
+
+  // For the explicit dark/light themes, both tags get the same surface colour so
+  // the toolbar is correct regardless of the OS colour-scheme preference.
+  // For the "system" theme, each tag covers its own scheme so Safari auto-switches.
+  const theme = getTheme(); // "dark" | "light" | "system"
+  const darkContent  = theme === "light" ? lightSurface : darkSurface;
+  const lightContent = theme === "dark"  ? darkSurface  : lightSurface;
+
+  const darkMetaEl  = document.getElementById("theme-color-meta-dark");
+  const lightMetaEl = document.getElementById("theme-color-meta-light");
+  if (darkMetaEl)  darkMetaEl.setAttribute("content",  darkContent);
+  if (lightMetaEl) lightMetaEl.setAttribute("content", lightContent);
 }
 
 /** Call once at startup to install the OS-theme change listener. */

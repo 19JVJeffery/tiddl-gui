@@ -362,7 +362,7 @@ export async function downloadTrack(trackId, quality = "HIGH", onProgress) {
  * Download all tracks in an album as a single ZIP file.
  * ZIP folder structure: `{albumArtist} - {albumTitle}/{track#}. {artist} - {title}.ext`
  */
-export async function downloadAlbum(albumId, quality = "HIGH", onProgress) {
+export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSubItemProgress) {
   try {
     onProgress?.(0, 1, `Fetching album info…`);
     const [albumMeta, itemsData] = await Promise.all([
@@ -381,16 +381,20 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress) {
     for (let i = 0; i < items.length; i++) {
       const track = items[i].item;
       onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
+      onSubItemProgress?.(i, items.length, track.title, 0, 1, "active");
       try {
-        const td = await fetchTrackData(track.id, quality, (d, t, msg) =>
-          onProgress?.(i, items.length, msg)
-        );
+        const td = await fetchTrackData(track.id, quality, (d, t, msg) => {
+          onProgress?.(i, items.length, msg);
+          onSubItemProgress?.(i, items.length, track.title, d, t, "active");
+        });
         const num = String(td.trackNumber || (i + 1)).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
         zipFiles.push({ name: fname, data: td.data });
         results.push({ filename: fname, success: true });
+        onSubItemProgress?.(i, items.length, td.title || track.title, 1, 1, "done");
       } catch (err) {
         results.push({ filename: track.title || String(track.id), success: false, error: err.message });
+        onSubItemProgress?.(i, items.length, track.title, 0, 1, "failed");
       }
     }
 
@@ -410,7 +414,7 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress) {
  * Download all tracks in a playlist as a single ZIP file.
  * ZIP folder structure: `{playlistTitle}/{track#}. {artist} - {title}.ext`
  */
-export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress) {
+export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress, onSubItemProgress) {
   try {
     onProgress?.(0, 1, `Fetching playlist info…`);
     const [playlistMeta, itemsData] = await Promise.all([
@@ -428,16 +432,20 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress)
     for (let i = 0; i < items.length; i++) {
       const track = items[i].item;
       onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
+      onSubItemProgress?.(i, items.length, track.title, 0, 1, "active");
       try {
-        const td = await fetchTrackData(track.id, quality, (d, t, msg) =>
-          onProgress?.(i, items.length, msg)
-        );
+        const td = await fetchTrackData(track.id, quality, (d, t, msg) => {
+          onProgress?.(i, items.length, msg);
+          onSubItemProgress?.(i, items.length, track.title, d, t, "active");
+        });
         const num = String(i + 1).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
         zipFiles.push({ name: fname, data: td.data });
         results.push({ filename: fname, success: true });
+        onSubItemProgress?.(i, items.length, td.title || track.title, 1, 1, "done");
       } catch (err) {
         results.push({ filename: track.title || String(track.id), success: false, error: err.message });
+        onSubItemProgress?.(i, items.length, track.title, 0, 1, "failed");
       }
     }
 
@@ -457,7 +465,7 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress)
  * Download all tracks in a mix as a single ZIP file.
  * ZIP folder structure: `Mix/{track#}. {artist} - {title}.ext`
  */
-export async function downloadMix(mixId, quality = "HIGH", onProgress) {
+export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItemProgress) {
   try {
     onProgress?.(0, 1, `Fetching mix items…`);
     const itemsData = await getMixItems(mixId, 100, 0);
@@ -470,16 +478,20 @@ export async function downloadMix(mixId, quality = "HIGH", onProgress) {
     for (let i = 0; i < items.length; i++) {
       const track = items[i].item;
       onProgress?.(i, items.length, `Track ${i + 1}/${items.length}: ${track.title}`);
+      onSubItemProgress?.(i, items.length, track.title, 0, 1, "active");
       try {
-        const td = await fetchTrackData(track.id, quality, (d, t, msg) =>
-          onProgress?.(i, items.length, msg)
-        );
+        const td = await fetchTrackData(track.id, quality, (d, t, msg) => {
+          onProgress?.(i, items.length, msg);
+          onSubItemProgress?.(i, items.length, track.title, d, t, "active");
+        });
         const num = String(i + 1).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
         zipFiles.push({ name: fname, data: td.data });
         results.push({ filename: fname, success: true });
+        onSubItemProgress?.(i, items.length, td.title || track.title, 1, 1, "done");
       } catch (err) {
         results.push({ filename: track.title || String(track.id), success: false, error: err.message });
+        onSubItemProgress?.(i, items.length, track.title, 0, 1, "failed");
       }
     }
 
@@ -536,7 +548,7 @@ export function parseTidalInput(input) {
  * Each album is packaged as its own ZIP file, downloaded in sequence.
  * Returns an array of per-album result arrays.
  */
-export async function downloadArtistAlbums(artistId, quality = "HIGH", onProgress) {
+export async function downloadArtistAlbums(artistId, quality = "HIGH", onProgress, onSubItemProgress) {
   try {
     onProgress?.(0, 1, "Fetching artist discography…");
     const [albumsData, singlesData] = await Promise.all([
@@ -557,9 +569,12 @@ export async function downloadArtistAlbums(artistId, quality = "HIGH", onProgres
     for (let i = 0; i < all.length; i++) {
       const album = all[i];
       onProgress?.(i, all.length, `Album ${i + 1}/${all.length}: ${album.title}`);
+      onSubItemProgress?.(i, all.length, album.title, 0, 1, "active");
       const res = await downloadAlbum(album.id, quality, (d, t, msg) =>
         onProgress?.(i, all.length, `Album ${i + 1}/${all.length}: ${msg || ""}`)
       );
+      const allOk = Array.isArray(res) ? res.every((r) => r.success) : res?.success;
+      onSubItemProgress?.(i, all.length, album.title, 1, 1, allOk ? "done" : "failed");
       allResults.push(...(Array.isArray(res) ? res : [res]));
     }
     return allResults;

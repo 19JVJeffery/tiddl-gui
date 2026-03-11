@@ -6,7 +6,8 @@
   <title>tiddl-gui — Tidal Downloader</title>
   <meta name="description" content="Download Tidal tracks, albums and playlists — now in your browser." />
   <link rel="icon" type="image/svg+xml" id="favicon-link" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0b14'/%3E%3Ctext x='16' y='24' text-anchor='middle' font-family='system-ui' font-weight='800' font-size='22' fill='%234fd08c'%3Et%3C/text%3E%3C/svg%3E" />
-  <meta name="theme-color" id="theme-color-meta" content="#111120" />
+  <meta name="theme-color" id="theme-color-meta-dark"  media="(prefers-color-scheme: dark)"  content="#111120" />
+  <meta name="theme-color" id="theme-color-meta-light" media="(prefers-color-scheme: light)" content="#ffffff" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -371,24 +372,24 @@
             Appearance
           </h3>
           <div class="field-group">
-            <label class="field-label">Theme</label>
+            <label class="field-label">Theme <span class="tip" tabindex="0" data-tip="Colour scheme for the app. System follows your OS preference; Dark always uses dark mode; Light always uses light mode.">?</span></label>
             <div class="segmented-control">
-              <button class="seg-btn" data-theme-val="system">
+              <button class="seg-btn" data-theme-val="system" data-tip="Follow your operating system's dark/light mode preference automatically.">
                 <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                 System
               </button>
-              <button class="seg-btn" data-theme-val="dark">
+              <button class="seg-btn" data-theme-val="dark" data-tip="Always use the dark colour scheme, regardless of OS setting.">
                 <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                 Dark
               </button>
-              <button class="seg-btn" data-theme-val="light">
+              <button class="seg-btn" data-theme-val="light" data-tip="Always use the light colour scheme, regardless of OS setting.">
                 <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
                 Light
               </button>
             </div>
           </div>
           <div class="field-group">
-            <label class="field-label">Accent Colour</label>
+            <label class="field-label">Accent Colour <span class="tip" tabindex="0" data-tip="The highlight colour used for buttons, selected items, active states, and progress bars throughout the app.">?</span></label>
             <div class="color-swatches">
               <button class="swatch" data-color="#4fd08c" style="--c:#4fd08c" title="Green (default)" aria-label="Green"></button>
               <button class="swatch" data-color="#4f9fd0" style="--c:#4f9fd0" title="Blue" aria-label="Blue"></button>
@@ -409,7 +410,7 @@
           </h3>
           <div class="settings-grid">
             <div class="field-group">
-              <label class="field-label" for="setting-track-quality">Default Track Quality</label>
+              <label class="field-label" for="setting-track-quality">Default Track Quality <span class="tip" tabindex="0" data-tip="Audio quality for downloaded tracks. Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi or Max Tidal subscription.">?</span></label>
               <select id="setting-track-quality" title="Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi/Max Tidal subscription.">
                 <option value="LOW">Low &mdash; 96 kbps .m4a</option>
                 <option value="HIGH">High &mdash; 320 kbps .m4a</option>
@@ -418,7 +419,7 @@
               </select>
             </div>
             <div class="field-group">
-              <label class="field-label" for="setting-video-quality">Video Quality</label>
+              <label class="field-label" for="setting-video-quality">Video Quality <span class="tip" tabindex="0" data-tip="Resolution for downloaded video files. Higher quality looks better but uses more storage. SD=360p · HD=720p · Full HD=1080p.">?</span></label>
               <select id="setting-video-quality" title="SD=360p · HD=720p · Full HD=1080p. Higher resolutions use more storage.">
                 <option value="sd">SD &mdash; 360p</option>
                 <option value="hd">HD &mdash; 720p</option>
@@ -426,11 +427,11 @@
               </select>
             </div>
             <div class="field-group">
-              <label class="field-label" for="setting-threads">Parallel Downloads</label>
+              <label class="field-label" for="setting-threads">Parallel Downloads <span class="tip" tabindex="0" data-tip="How many tracks are downloaded at the same time. Higher values are faster but may trigger Tidal API rate limits. 4 is a safe default.">?</span></label>
               <input id="setting-threads" type="number" min="1" max="20" value="4" title="Number of tracks downloaded at the same time. 4 is a good default. Very high values may trigger API rate limits." />
             </div>
             <div class="field-group">
-              <label class="field-label" for="setting-singles-filter">Singles Filter</label>
+              <label class="field-label" for="setting-singles-filter">Singles Filter <span class="tip" tabindex="0" data-tip="Controls whether artist discography downloads include singles and EPs. None=full albums only · Only=singles &amp; EPs only · Include=albums and singles/EPs.">?</span></label>
               <select id="setting-singles-filter" title="None=full albums only · Only=singles &amp; EPs only · Include=albums plus singles &amp; EPs">
                 <option value="none">None &mdash; full albums only</option>
                 <option value="only">Only &mdash; singles only</option>
@@ -438,7 +439,7 @@
               </select>
             </div>
             <div class="field-group">
-              <label class="field-label" for="setting-videos-filter">Videos Filter</label>
+              <label class="field-label" for="setting-videos-filter">Videos Filter <span class="tip" tabindex="0" data-tip="Controls whether video content is included in downloads. None=skip all videos · Only=videos only, skip audio tracks · Allow=download both tracks and videos.">?</span></label>
               <select id="setting-videos-filter" title="None=skip videos · Only=videos only · Allow=tracks plus videos">
                 <option value="none">None &mdash; skip videos</option>
                 <option value="only">Only &mdash; videos only</option>
@@ -447,10 +448,10 @@
             </div>
           </div>
           <div class="checkbox-group">
-            <label class="checkbox-label" title="Skip files that have already been downloaded to avoid re-downloading. Matched by filename."><input type="checkbox" id="setting-skip-existing" checked /><span>Skip already-downloaded files</span></label>
-            <label class="checkbox-label" title="Update the file modification timestamp on already-downloaded files when they are skipped."><input type="checkbox" id="setting-update-mtime" /><span>Update modification time of existing files</span></label>
-            <label class="checkbox-label" title="Re-embed metadata tags into files that already exist, even if the audio was skipped."><input type="checkbox" id="setting-rewrite-metadata" /><span>Rewrite metadata for already-downloaded files</span></label>
-            <label class="checkbox-label" title="Enables a per-item quality selector in the download queue. The main quality selector becomes an 'override all' control."><input type="checkbox" id="setting-advanced-mode" /><span>Advanced mode &mdash; set quality per-item in the download queue</span></label>
+            <label class="checkbox-label" title="Skip files that have already been downloaded to avoid re-downloading. Matched by filename."><input type="checkbox" id="setting-skip-existing" checked /><span>Skip already-downloaded files</span><span class="tip" tabindex="0" data-tip="When enabled, files that already exist on disk are skipped to avoid re-downloading. Matched by filename — renamed files will be re-downloaded.">?</span></label>
+            <label class="checkbox-label" title="Update the file modification timestamp on already-downloaded files when they are skipped."><input type="checkbox" id="setting-update-mtime" /><span>Update modification time of existing files</span><span class="tip" tabindex="0" data-tip="Touches the last-modified timestamp on skipped files, as if they had just been downloaded now. Useful if other tools sort by date.">?</span></label>
+            <label class="checkbox-label" title="Re-embed metadata tags into files that already exist, even if the audio was skipped."><input type="checkbox" id="setting-rewrite-metadata" /><span>Rewrite metadata for already-downloaded files</span><span class="tip" tabindex="0" data-tip="Re-embeds metadata tags (title, artist, cover, etc.) into existing files even if the audio itself was not re-downloaded.">?</span></label>
+            <label class="checkbox-label" title="Enables a per-item quality selector in the download queue. The main quality selector becomes an 'override all' control."><input type="checkbox" id="setting-advanced-mode" /><span>Advanced mode &mdash; set quality per-item in the download queue</span><span class="tip" tabindex="0" data-tip="Adds a quality picker to each item in the download queue so you can use a different quality for each track, album, or playlist individually.">?</span></label>
           </div>
         </div>
 
@@ -458,7 +459,7 @@
         <div class="settings-section">
           <h3>
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            File Path Templates
+            File Path Templates <span class="tip" tabindex="0" data-tip="Customise the folder structure and filename used when saving downloads. Tokens like {item.title} are replaced with real values at download time. Use / to create sub-folders.">?</span>
           </h3>
           <p>Build custom file path templates. Click or drag a token chip, or type freely. Use <code>/</code> for sub-folders.</p>
           <div class="template-tabs">
@@ -489,10 +490,10 @@
             Metadata
           </h3>
           <div class="checkbox-group">
-            <label class="checkbox-label" title="Embed ID3/FLAC tags (title, artist, album, track number, etc.) into downloaded files."><input type="checkbox" id="setting-meta-enable" checked /><span>Embed metadata in downloaded files</span></label>
-            <label class="checkbox-label" title="Fetch and embed synced or unsynced lyrics from Tidal into the file tags."><input type="checkbox" id="setting-meta-lyrics" /><span>Embed lyrics in metadata</span></label>
-            <label class="checkbox-label" title="Embed the album cover art directly inside the downloaded audio file (increases file size)."><input type="checkbox" id="setting-meta-cover" /><span>Embed album cover in track file</span></label>
-            <label class="checkbox-label" title="Store the Tidal album review text in the COMMENT metadata field."><input type="checkbox" id="setting-meta-album-review" /><span>Embed album review in COMMENT field</span></label>
+            <label class="checkbox-label" title="Embed ID3/FLAC tags (title, artist, album, track number, etc.) into downloaded files."><input type="checkbox" id="setting-meta-enable" checked /><span>Embed metadata in downloaded files</span><span class="tip" tabindex="0" data-tip="Writes ID3 or FLAC tags (title, artist, album, track number, year, etc.) into every downloaded file.">?</span></label>
+            <label class="checkbox-label" title="Fetch and embed synced or unsynced lyrics from Tidal into the file tags."><input type="checkbox" id="setting-meta-lyrics" /><span>Embed lyrics in metadata</span><span class="tip" tabindex="0" data-tip="Fetches synced or plain lyrics from Tidal and stores them in the LYRICS/USLT tag inside the file.">?</span></label>
+            <label class="checkbox-label" title="Embed the album cover art directly inside the downloaded audio file (increases file size)."><input type="checkbox" id="setting-meta-cover" /><span>Embed album cover in track file</span><span class="tip" tabindex="0" data-tip="Stores the album artwork as an embedded thumbnail inside each audio file. Makes files larger but keeps artwork portable.">?</span></label>
+            <label class="checkbox-label" title="Store the Tidal album review text in the COMMENT metadata field."><input type="checkbox" id="setting-meta-album-review" /><span>Embed album review in COMMENT field</span><span class="tip" tabindex="0" data-tip="Saves the Tidal album description/review into the COMMENT tag of every track in that album.">?</span></label>
           </div>
         </div>
 
@@ -502,13 +503,13 @@
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
             Cover Art
           </h3>
-          <div class="field-group"><label class="checkbox-label"><input type="checkbox" id="setting-cover-save" /><span>Save cover art as a separate file</span></label></div>
+          <div class="field-group"><label class="checkbox-label"><input type="checkbox" id="setting-cover-save" /><span>Save cover art as a separate file</span><span class="tip" tabindex="0" data-tip="Saves album or playlist cover artwork as a standalone image file (e.g. cover.jpg) inside the download folder alongside the audio files.">?</span></label></div>
           <div class="field-group">
-            <label class="field-label" for="setting-cover-size">Cover size (px, max 1280)</label>
+            <label class="field-label" for="setting-cover-size">Cover size (px, max 1280) <span class="tip" tabindex="0" data-tip="Width and height in pixels of the saved cover image (images are always square). Maximum is 1280. Common values: 640, 1080, 1280.">?</span></label>
             <input id="setting-cover-size" type="number" min="80" max="1280" step="80" value="1280" style="max-width:140px" />
           </div>
           <div class="field-group">
-            <label class="field-label">Save cover for</label>
+            <label class="field-label">Save cover for <span class="tip" tabindex="0" data-tip="Choose which download types will trigger saving a separate cover image file.">?</span></label>
             <div class="checkbox-group">
               <label class="checkbox-label"><input type="checkbox" id="setting-cover-allowed-track" /><span>Tracks</span></label>
               <label class="checkbox-label"><input type="checkbox" id="setting-cover-allowed-album" /><span>Albums</span></label>
@@ -523,9 +524,9 @@
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
             M3U Playlists
           </h3>
-          <div class="field-group"><label class="checkbox-label"><input type="checkbox" id="setting-m3u-save" /><span>Save M3U playlist files alongside downloads</span></label></div>
+          <div class="field-group"><label class="checkbox-label"><input type="checkbox" id="setting-m3u-save" /><span>Save M3U playlist files alongside downloads</span><span class="tip" tabindex="0" data-tip="Generates a .m3u playlist file listing the downloaded audio tracks. Useful for media players like VLC, foobar2000, or Winamp.">?</span></label></div>
           <div class="field-group">
-            <label class="field-label">Generate M3U for</label>
+            <label class="field-label">Generate M3U for <span class="tip" tabindex="0" data-tip="Choose which download types will have an .m3u playlist file generated alongside the audio files.">?</span></label>
             <div class="checkbox-group">
               <label class="checkbox-label"><input type="checkbox" id="setting-m3u-allowed-album" checked /><span>Albums</span></label>
               <label class="checkbox-label"><input type="checkbox" id="setting-m3u-allowed-mix" checked /><span>Mixes</span></label>
@@ -546,7 +547,7 @@
             <strong>The defaults work for most users.</strong>
           </p>
           <div class="field-group">
-            <label class="field-label" for="proxy-input">CORS proxy prefix URL</label>
+            <label class="field-label" for="proxy-input">CORS proxy prefix URL <span class="tip" tabindex="0" data-tip="Prepended to every Tidal API request so the browser can reach the API. Required because browsers block direct cross-origin requests. The default (corsproxy.io) works for most users. Leave blank to disable (only works if CORS is handled server-side).">?</span></label>
             <p style="font-size:0.78rem;color:var(--color-text-muted);margin-bottom:0.4rem;line-height:1.5">
               Required for browser API access &mdash; Tidal's API blocks direct browser requests.
               Default (<a href="https://corsproxy.io" target="_blank" rel="noopener">corsproxy.io</a>) works out of the box.
@@ -559,11 +560,11 @@
           </p>
           <div class="settings-grid">
             <div class="field-group">
-              <label class="field-label" for="client-id-input">Client ID</label>
+              <label class="field-label" for="client-id-input">Client ID <span class="tip" tabindex="0" data-tip="Your custom Tidal API client ID. Only needed if you have your own Tidal developer app registered at developer.tidal.com. Leave blank to use the built-in default.">?</span></label>
               <input id="client-id-input" type="text" placeholder="(default)" autocomplete="off" spellcheck="false" />
             </div>
             <div class="field-group">
-              <label class="field-label" for="client-secret-input">Client Secret</label>
+              <label class="field-label" for="client-secret-input">Client Secret <span class="tip" tabindex="0" data-tip="Your custom Tidal API client secret. Paired with the Client ID above. Leave blank to use the built-in default.">?</span></label>
               <input id="client-secret-input" type="password" placeholder="(default)" autocomplete="off" />
             </div>
           </div>

@@ -190,6 +190,12 @@ function buildProgressList(items) {
     const thumbHtml = item.cover
       ? `<img src="${escHtml(item.cover)}" alt="" class="dl-item-thumb${item.coverRound ? " round" : ""}" loading="lazy" />`
       : `<div class="dl-item-thumb${item.coverRound ? " round" : ""}"></div>`;
+    const isMulti = ["album", "playlist", "mix", "artist"].includes(item.type);
+    const expandBtn = isMulti
+      ? `<button class="dl-item-expand-btn" data-expand-idx="${idx}" aria-label="Toggle download progress details" aria-expanded="false" title="Expand to see individual track progress">
+           <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+         </button>`
+      : "";
     return `<div class="dl-item-row dl-item-row--pending" id="dl-item-row-${idx}">
       ${thumbHtml}
       <div class="dl-item-details">
@@ -197,9 +203,60 @@ function buildProgressList(items) {
         <div class="dl-item-msg" id="dl-item-msg-${idx}">Waiting\u2026</div>
         <div class="dl-item-bar-track"><div class="dl-item-bar-fill" id="dl-item-bar-${idx}" style="width:0%"></div></div>
       </div>
+      ${expandBtn}
       <span class="dl-item-icon" id="dl-item-icon-${idx}"></span>
-    </div>`;
+    </div>
+    <div class="dl-item-sub-list hidden" id="dl-item-sub-${idx}"></div>`;
   }).join("");
+
+  // Use event delegation on the list container to avoid per-button listeners
+  list.addEventListener("click", (e) => {
+    const btn = e.target.closest(".dl-item-expand-btn");
+    if (!btn) return;
+    const idx = btn.dataset.expandIdx;
+    const subList = $(`dl-item-sub-${idx}`);
+    if (!subList) return;
+    const expanded = btn.getAttribute("aria-expanded") === "true";
+    btn.setAttribute("aria-expanded", String(!expanded));
+    btn.classList.toggle("expanded", !expanded);
+    subList.classList.toggle("hidden", expanded);
+  });
+}
+
+// ─── Per-item sub-progress rows ───────────────────────────────────────────────
+
+function upsertSubItemRow(rowIdx, subIdx, title, done, total, status) {
+  const subList = $(`dl-item-sub-${rowIdx}`);
+  if (!subList) return;
+
+  let subRow = $(`dl-sub-item-${rowIdx}-${subIdx}`);
+  if (!subRow) {
+    subRow = document.createElement("div");
+    subRow.id = `dl-sub-item-${rowIdx}-${subIdx}`;
+    subRow.className = "dl-sub-item dl-sub-item--active";
+    subRow.innerHTML = `
+      <div class="dl-sub-item-details">
+        <div class="dl-sub-item-title" id="dl-sub-item-title-${rowIdx}-${subIdx}">${escHtml(title)}</div>
+        <div class="dl-sub-item-bar-track">
+          <div class="dl-sub-item-bar-fill" id="dl-sub-item-bar-${rowIdx}-${subIdx}" style="width:0%"></div>
+        </div>
+      </div>
+      <span class="dl-sub-item-icon" id="dl-sub-item-icon-${rowIdx}-${subIdx}"></span>
+    `;
+    subList.appendChild(subRow);
+  }
+
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const barEl   = $(`dl-sub-item-bar-${rowIdx}-${subIdx}`);
+  const iconEl  = $(`dl-sub-item-icon-${rowIdx}-${subIdx}`);
+  const titleEl = $(`dl-sub-item-title-${rowIdx}-${subIdx}`);
+
+  if (barEl)   barEl.style.width = `${pct}%`;
+  if (titleEl) titleEl.textContent = title;
+  subRow.className = `dl-sub-item dl-sub-item--${status}`;
+  if (iconEl) {
+    iconEl.textContent = status === "done" ? "\u2713" : status === "failed" ? "\u2717" : "";
+  }
 }
 
 // ─── Nav ─────────────────────────────────────────────────────────────────────
@@ -586,14 +643,21 @@ async function handleDownload() {
       if (itemMsgEl && msg) itemMsgEl.textContent = msg;
     };
 
+    const isMulti = ["album", "playlist", "mix", "artist"].includes(item.type);
+    const onSubItemProgress = isMulti
+      ? (subIdx, subTotal, title, done, total, status) => {
+          upsertSubItemRow(qi, subIdx, title, done, total, status);
+        }
+      : undefined;
+
     try {
       let results = [];
       switch (item.type) {
         case "track":    results = [await downloadTrack(item.id, quality, onProgress)]; break;
-        case "album":    results = await downloadAlbum(item.id, quality, onProgress); break;
-        case "playlist": results = await downloadPlaylist(item.id, quality, onProgress); break;
-        case "mix":      results = await downloadMix(item.id, quality, onProgress); break;
-        case "artist":   results = await downloadArtistAlbums(item.id, quality, onProgress); break;
+        case "album":    results = await downloadAlbum(item.id, quality, onProgress, onSubItemProgress); break;
+        case "playlist": results = await downloadPlaylist(item.id, quality, onProgress, onSubItemProgress); break;
+        case "mix":      results = await downloadMix(item.id, quality, onProgress, onSubItemProgress); break;
+        case "artist":   results = await downloadArtistAlbums(item.id, quality, onProgress, onSubItemProgress); break;
         default:
           appendLog(`Resource type "${item.type}" not yet supported in the browser.`, "warn");
           results = [{ filename: String(item.id), success: false, error: "unsupported type" }];
@@ -1168,7 +1232,7 @@ async function navigateToDetail(type, id, title, sub, cover, fromTab) {
     <div class="detail-header-info">
       <span class="detail-type-badge">${escHtml(typeLabel)}</span>
       <h2 class="detail-title">${escHtml(title)}</h2>
-      <p class="detail-sub">${escHtml(sub)}</p>
+      <p class="detail-sub" id="detail-sub">${escHtml(sub)}</p>
       <div class="detail-actions">
         <button class="btn-primary" id="btn-detail-dl-queue">
           <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1257,6 +1321,23 @@ async function renderAlbumDetail(albumId, body) {
     getAllAlbumItems(albumId),
   ]);
   const tracks = (allItems || []).filter((i) => i.type === "track").map((i) => i.item);
+
+  // Make the artist name in the header a link to the artist's detail page
+  const artistId   = albumMeta.artist?.id;
+  const artistName = albumMeta.artist?.name || "";
+  const artistCover = coverUrl(albumMeta.artist?.picture);
+  const subEl = $("detail-sub");
+  if (subEl && artistId) {
+    subEl.innerHTML = "";
+    const btn = document.createElement("button");
+    btn.className = "detail-artist-link";
+    btn.textContent = artistName;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      navigateToDetail("artist", artistId, artistName, "", artistCover, _detailOriginTab);
+    });
+    subEl.appendChild(btn);
+  }
 
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
@@ -1562,7 +1643,68 @@ function updateThemeIcon() {
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
+// ─── Tooltips ─────────────────────────────────────────────────────────────────
+
+function initTooltips() {
+  const box = document.createElement("div");
+  box.className = "tip-box";
+  box.setAttribute("role", "tooltip");
+  document.body.appendChild(box);
+
+  function positionAndShow(el) {
+    box.textContent = el.dataset.tip;
+    // Measure while hidden (visibility:hidden keeps layout but hides paint)
+    box.style.visibility = "hidden";
+    box.classList.add("visible");
+    const bw = box.offsetWidth;
+    const bh = box.offsetHeight;
+    box.classList.remove("visible");
+    box.style.visibility = "";
+
+    const r   = el.getBoundingClientRect();
+    const gap = 8;
+    // Prefer above the element; flip below if not enough room
+    let top = r.top - bh - gap;
+    if (top < gap) top = r.bottom + gap;
+    const left = Math.max(gap, Math.min(r.left, window.innerWidth - bw - gap));
+    box.style.top  = `${top}px`;
+    box.style.left = `${left}px`;
+    box.classList.add("visible");
+  }
+
+  function hide() { box.classList.remove("visible"); }
+
+  // Mouse: show on hover of any [data-tip] element
+  document.addEventListener("mouseover", (e) => {
+    const el = e.target.closest("[data-tip]");
+    if (el) positionAndShow(el);
+  });
+  document.addEventListener("mouseout", (e) => {
+    if (!e.relatedTarget?.closest("[data-tip]")) hide();
+  });
+
+  // Keyboard: show on focus, hide on blur/Escape
+  document.addEventListener("focusin", (e) => {
+    const el = e.target.closest("[data-tip]");
+    if (el) positionAndShow(el);
+  });
+  document.addEventListener("focusout", (e) => {
+    if (!e.relatedTarget?.closest("[data-tip]")) hide();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hide();
+  });
+
+  // Prevent `.tip` spans inside <label> elements from toggling their checkbox.
+  // The capture phase intercepts the click before it bubbles to the label.
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".tip")) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+}
+
 export function init() {
+  initTooltips();
+
   // Apply stored appearance
   const theme = getTheme();
   applyTheme(theme);

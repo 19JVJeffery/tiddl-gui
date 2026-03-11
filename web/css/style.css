@@ -1183,6 +1183,13 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
   font-size: 0.82rem; padding: 0.35rem 2rem 0.35rem 0.7rem;
   height: 32px;
 }
+.library-sort-select {
+  height: 32px; padding: 0 0.5rem; font-size: 0.82rem;
+  border: 1px solid var(--color-border); border-radius: var(--r);
+  background: var(--color-surface-2); color: var(--color-text);
+  cursor: pointer; flex-shrink: 0;
+}
+.library-sort-select:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 .library-welcome {
   background: linear-gradient(135deg, var(--color-accent-soft) 0%, transparent 100%);
   border: 1px solid var(--color-accent); border-radius: var(--r-lg);
@@ -1229,6 +1236,22 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .library-track-item.selected .library-track-add {
   opacity: 1; background: var(--color-accent); border-color: var(--color-accent); color: #fff;
 }
+.library-track-date {
+  font-size: 0.72rem; color: var(--color-text-muted); flex-shrink: 0;
+  white-space: nowrap; min-width: 72px; text-align: right;
+}
+.library-track-header {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 0.2rem var(--sp-2) 0.4rem; border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0.25rem; pointer-events: none;
+}
+.library-track-header-labels {
+  font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.library-track-date-header {
+  font-size: 0.72rem; font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.library-track-add-placeholder { width: 48px; flex-shrink: 0; }
 .library-load-more {
   display: flex; justify-content: center; margin-top: var(--sp-4);
 }

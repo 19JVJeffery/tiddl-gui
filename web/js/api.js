@@ -23,6 +23,7 @@ async function apiFetch(endpoint, params = {}) {
       Authorization: `Bearer ${token}`,
       Accept: "application/json",
     },
+    credentials: "omit",
   });
 
   const json = await res.json();

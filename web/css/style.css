@@ -917,7 +917,7 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .dl-tab-btn.active { background: var(--color-surface-3); color: var(--color-text); font-weight: 600; }
 
 .dl-tab-spacer { flex: 1; }
-.dl-clear-log-btn { font-size: 0.72rem; padding: 0.18rem 0.65rem; }
+.dl-log-action-btn { font-size: 0.72rem; padding: 0.18rem 0.65rem; }
 
 .dl-status-view { display: flex; flex-direction: column; }
 .dl-status-view.hidden { display: none; }

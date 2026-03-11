@@ -162,12 +162,14 @@ function switchDlTab(tab) {
   const progressBtn  = $("dl-tab-progress-btn");
   const logBtn       = $("dl-tab-log-btn");
   const clearLogBtn  = $("btn-clear-log");
+  const exportLogBtn = $("btn-export-log");
   if (tab === "log") {
     progressView?.classList.add("hidden");
     logView?.classList.remove("hidden");
     progressBtn?.classList.remove("active");
     logBtn?.classList.add("active");
     clearLogBtn?.classList.remove("hidden");
+    exportLogBtn?.classList.remove("hidden");
     logBtn?.setAttribute("aria-selected", "true");
     progressBtn?.setAttribute("aria-selected", "false");
   } else {
@@ -176,9 +178,26 @@ function switchDlTab(tab) {
     logBtn?.classList.remove("active");
     progressBtn?.classList.add("active");
     clearLogBtn?.classList.add("hidden");
+    exportLogBtn?.classList.add("hidden");
     progressBtn?.setAttribute("aria-selected", "true");
     logBtn?.setAttribute("aria-selected", "false");
   }
+}
+
+function exportLog() {
+  const log = $("download-log");
+  if (!log) return;
+  const lines = [...log.querySelectorAll(".log-line")].map((el) => el.textContent).join("\n");
+  if (!lines) return;
+  const blob = new Blob([lines], { type: "text/plain" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `tiddl-log-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // ─── Per-item progress list ───────────────────────────────────────────────────
@@ -1777,6 +1796,7 @@ export function init() {
   $("dl-tab-progress-btn")?.addEventListener("click", () => switchDlTab("progress"));
   $("dl-tab-log-btn")?.addEventListener("click", () => switchDlTab("log"));
   $("btn-clear-log")?.addEventListener("click", clearLog);
+  $("btn-export-log")?.addEventListener("click", exportLog);
 
   // Toggle collapse/expand of the pinned status bar
   $("btn-toggle-status-bar")?.addEventListener("click", () => {

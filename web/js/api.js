@@ -109,6 +109,54 @@ export async function getUserPlaylists(limit = 50, offset = 0) {
   return apiFetch(`users/${auth.user_id}/playlists`, { limit, offset });
 }
 
+// ─── Fetch-all helpers ─────────────────────────────────────────────────────
+
+/**
+ * Fetch every page of a paginated Tidal endpoint.
+ * `fetchFn(limit, offset)` must return `{ items: [...], totalNumberOfItems: N }`.
+ * Pages are fetched sequentially to avoid rate-limiting.
+ */
+async function fetchAllItems(fetchFn, pageSize = 50) {
+  const first = await fetchFn(pageSize, 0);
+  const total = first.totalNumberOfItems ?? (first.items?.length ?? 0);
+  let items = first.items ?? [];
+
+  let offset = items.length;
+  while (offset < total) {
+    const page = await fetchFn(pageSize, offset);
+    const pageItems = page.items ?? [];
+    if (!pageItems.length) break;
+    items = items.concat(pageItems);
+    offset += pageItems.length;
+  }
+
+  return items;
+}
+
+export async function getAllUserFavoriteTracks() {
+  return fetchAllItems((limit, offset) => getUserFavoriteTracks(limit, offset));
+}
+
+export async function getAllUserFavoriteAlbums() {
+  return fetchAllItems((limit, offset) => getUserFavoriteAlbums(limit, offset));
+}
+
+export async function getAllUserFavoritePlaylists() {
+  return fetchAllItems((limit, offset) => getUserFavoritePlaylists(limit, offset));
+}
+
+export async function getAllUserPlaylists() {
+  return fetchAllItems((limit, offset) => getUserPlaylists(limit, offset));
+}
+
+export async function getAllAlbumItems(id) {
+  return fetchAllItems((limit, offset) => getAlbumItems(id, limit, offset));
+}
+
+export async function getAllPlaylistItems(uuid) {
+  return fetchAllItems((limit, offset) => getPlaylistItems(uuid, limit, offset));
+}
+
 export async function getSession() {
   return apiFetch("sessions");
 }

@@ -11,10 +11,13 @@ import {
 import {
   search,
   getArtistAlbums, getArtistSingles,
-  getAlbum, getAlbumItems,
-  getPlaylist, getPlaylistItems,
+  getAlbum,
+  getPlaylist,
   getUserFavoriteTracks, getUserFavoriteAlbums,
   getUserFavoritePlaylists, getUserPlaylists,
+  getAllUserFavoriteTracks, getAllUserFavoriteAlbums,
+  getAllUserFavoritePlaylists, getAllUserPlaylists,
+  getAllAlbumItems, getAllPlaylistItems,
 } from "./api.js";
 import {
   parseTidalInput, downloadTrack, downloadAlbum,
@@ -1046,11 +1049,11 @@ async function renderArtistDetail(artistId, artistName, body) {
 }
 
 async function renderAlbumDetail(albumId, body) {
-  const [albumMeta, itemsData] = await Promise.all([
+  const [albumMeta, allItems] = await Promise.all([
     getAlbum(albumId),
-    getAlbumItems(albumId, 100, 0),
+    getAllAlbumItems(albumId),
   ]);
-  const tracks = (itemsData.items || []).filter((i) => i.type === "track").map((i) => i.item);
+  const tracks = (allItems || []).filter((i) => i.type === "track").map((i) => i.item);
 
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
@@ -1093,11 +1096,11 @@ async function renderAlbumDetail(albumId, body) {
 }
 
 async function renderPlaylistDetail(playlistId, body) {
-  const [plMeta, itemsData] = await Promise.all([
+  const [plMeta, allItems] = await Promise.all([
     getPlaylist(playlistId),
-    getPlaylistItems(playlistId, 100, 0),
+    getAllPlaylistItems(playlistId),
   ]);
-  const tracks = (itemsData.items || []).filter((i) => i.type === "track").map((i) => i.item);
+  const tracks = (allItems || []).filter((i) => i.type === "track").map((i) => i.item);
 
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
@@ -1142,6 +1145,8 @@ let _librarySection  = "tracks";
 let _libraryLoaded   = { tracks: false, albums: false, playlists: false };
 let _libraryData     = { tracks: [], albums: [], playlists: [] };
 let _libraryFilter   = "";
+let _librarySort     = "dateAdded";
+let _librarySortDir  = "desc";
 
 async function loadLibraryIfNeeded() {
   if (!isLoggedIn()) {
@@ -1166,21 +1171,21 @@ async function loadLibraryIfNeeded() {
     renderLibraryContent(null);
     try {
       if (_librarySection === "tracks") {
-        const data = await getUserFavoriteTracks(50, 0);
-        _libraryData.tracks = (data.items || []).map((i) => i.item || i);
+        const items = await getAllUserFavoriteTracks();
+        _libraryData.tracks = items.map((i) => ({ ...(i.item || i), _dateAdded: i.dateAdded || "" }));
       } else if (_librarySection === "albums") {
-        const data = await getUserFavoriteAlbums(50, 0);
-        _libraryData.albums = (data.items || []).map((i) => i.item || i);
+        const items = await getAllUserFavoriteAlbums();
+        _libraryData.albums = items.map((i) => ({ ...(i.item || i), _dateAdded: i.dateAdded || "" }));
       } else if (_librarySection === "playlists") {
-        const [favData, ownData] = await Promise.all([
-          getUserFavoritePlaylists(50, 0).catch(() => ({ items: [] })),
-          getUserPlaylists(50, 0).catch(() => ({ items: [] })),
+        const [favItems, ownItems] = await Promise.all([
+          getAllUserFavoritePlaylists().catch(() => []),
+          getAllUserPlaylists().catch(() => []),
         ]);
-        const favItems = (favData.items || []).map((i) => i.item || i);
-        const ownItems = ownData.items || [];
+        const favMapped = favItems.map((i) => ({ ...(i.item || i), _dateAdded: i.dateAdded || "" }));
+        const ownMapped = ownItems.map((i) => ({ ...(i.item || i), _dateAdded: i.dateAdded || "" }));
         // Deduplicate by uuid
         const seen = new Set();
-        _libraryData.playlists = [...ownItems, ...favItems].filter((p) => {
+        _libraryData.playlists = [...ownMapped, ...favMapped].filter((p) => {
           const key = p.uuid || p.id;
           if (seen.has(key)) return false;
           seen.add(key); return true;
@@ -1210,15 +1215,29 @@ function renderLibraryContent(items) {
     return;
   }
 
+  // Apply sort
+  const sorted = [...items].sort((a, b) => {
+    let cmp = 0;
+    if (_librarySort === "title") {
+      cmp = (a.title || a.name || "").localeCompare(b.title || b.name || "");
+    } else if (_librarySort === "artist") {
+      cmp = (a.artist?.name || a.creator?.name || "").localeCompare(b.artist?.name || b.creator?.name || "");
+    } else {
+      // dateAdded — compare a to b (asc = oldest first, desc = newest first)
+      cmp = (a._dateAdded || "").localeCompare(b._dateAdded || "");
+    }
+    return _librarySortDir === "asc" ? cmp : -cmp;
+  });
+
   // Apply filter
   const filterTerm = _libraryFilter.toLowerCase().trim();
   const filtered = filterTerm
-    ? items.filter((item) => {
+    ? sorted.filter((item) => {
         const title = (item.title || item.name || "").toLowerCase();
         const artist = (item.artist?.name || item.creator?.name || "").toLowerCase();
         return title.includes(filterTerm) || artist.includes(filterTerm);
       })
-    : items;
+    : sorted;
 
   if (!filtered.length) {
     content.innerHTML = `<p class="no-results">No results for &ldquo;${escHtml(_libraryFilter)}&rdquo;.</p>`;
@@ -1226,9 +1245,21 @@ function renderLibraryContent(items) {
   }
 
   if (_librarySection === "tracks") {
-    content.innerHTML = `<div class="library-track-list">${filtered.map((t) => {
+    content.innerHTML = `<div class="library-track-list">
+      <div class="library-track-header" aria-hidden="true">
+        <div class="library-track-thumb"></div>
+        <div class="library-track-info library-track-header-labels">
+          <span>Title / Artist</span>
+        </div>
+        ${_librarySort === "dateAdded" ? '<span class="library-track-date library-track-date-header">Added</span>' : ""}
+        <span class="library-track-add-placeholder"></span>
+      </div>
+      ${filtered.map((t) => {
       const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
       const cover = coverUrl(t.album?.cover, 80);
+      const dateLabel = _librarySort === "dateAdded" && t._dateAdded
+        ? (t._dateAdded.length >= 10 ? t._dateAdded.slice(0, 10) : t._dateAdded)
+        : "";
       return `<div class="library-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
           data-title="${escHtml(t.title)}" data-artist="${escHtml(t.artist?.name || "")}"
           data-cover="${escHtml(coverUrl(t.album?.cover))}" tabindex="0" role="button">
@@ -1237,6 +1268,7 @@ function renderLibraryContent(items) {
           <span class="library-track-title">${escHtml(t.title)}</span>
           <span class="library-track-artist">${escHtml(t.artist?.name || "")}</span>
         </div>
+        ${dateLabel ? `<span class="library-track-date">${escHtml(dateLabel)}</span>` : ""}
         <button class="library-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
       </div>`;
     }).join("")}</div>`;
@@ -1431,6 +1463,16 @@ export function init() {
       );
       loadLibraryIfNeeded();
     });
+  });
+
+  // Library sort select
+  $("library-sort-select")?.addEventListener("change", (e) => {
+    const [field, dir] = e.target.value.split("-");
+    _librarySort = field;
+    _librarySortDir = dir || "asc";
+    if (_libraryLoaded[_librarySection]) {
+      renderLibraryContent(_libraryData[_librarySection]);
+    }
   });
 
   // Library filter input

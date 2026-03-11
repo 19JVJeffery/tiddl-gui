@@ -585,6 +585,18 @@ function setProgress(done, total, message) {
 
 // ─── Download ─────────────────────────────────────────────────────────────────
 
+function expandStatusBar() {
+  const bar = $("dl-status-bar");
+  const btn = $("btn-toggle-status-bar");
+  if (bar && bar.classList.contains("collapsed")) {
+    bar.classList.remove("collapsed");
+    if (btn) {
+      btn.setAttribute("aria-expanded", "true");
+      btn.setAttribute("aria-label", "Collapse status bar");
+    }
+  }
+}
+
 async function handleDownload() {
   if (!isLoggedIn()) {
     appendLog("You must be logged in to download.", "error");
@@ -610,6 +622,8 @@ async function handleDownload() {
   const downloadBtn   = $("btn-download");
   downloadBtn.disabled = true;
   clearLog();
+  // Expand the pinned status bar so progress is immediately visible
+  expandStatusBar();
   switchDlTab("progress");
   buildProgressList(items);
   setProgress(0, items.length, "Starting\u2026");
@@ -794,6 +808,15 @@ async function enrichQueueItemFromUrl(type, id) {
       item.sub   = sub;
       item.cover = cover;
       renderQueue();
+    }
+    // Also update the URL pill label so it shows the real title instead of type/id
+    const pillEl = document.querySelector(`.url-pill[data-type="${CSS.escape(type)}"][data-id="${CSS.escape(String(id))}"]`);
+    if (pillEl) {
+      const labelEl = pillEl.querySelector(".url-pill-label");
+      if (labelEl) {
+        labelEl.textContent = sub ? `${title} — ${sub}` : title;
+        labelEl.title = sub ? `${title} — ${sub}` : title;
+      }
     }
   } catch {
     // Silently fail — the URL/ID placeholder remains visible
@@ -1212,6 +1235,16 @@ async function showSearchSuggestions() {
 
 // ─── Detail panel ─────────────────────────────────────────────────────────────
 
+/** Build the inner HTML for the detail queue button, reflecting current queue state. */
+function _detailQueueBtnHtml(typeLabel, isInQueue) {
+  if (isInQueue) {
+    return `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><polyline points="20 6 9 17 4 12"/></svg>
+            ${escHtml(typeLabel)} in Queue`;
+  }
+  return `<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add ${escHtml(typeLabel)} to Queue`;
+}
+
 async function navigateToDetail(type, id, title, sub, cover, fromTab) {
   openDetailPanel(fromTab);
 
@@ -1234,20 +1267,32 @@ async function navigateToDetail(type, id, title, sub, cover, fromTab) {
       <h2 class="detail-title">${escHtml(title)}</h2>
       <p class="detail-sub" id="detail-sub">${escHtml(sub)}</p>
       <div class="detail-actions">
-        <button class="btn-primary" id="btn-detail-dl-queue">
-          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right:4px;vertical-align:-2px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add ${escHtml(typeLabel)} to Queue
+        <button class="${inQueue ? "btn-secondary in-queue" : "btn-primary"}" id="btn-detail-dl-queue">
+          ${_detailQueueBtnHtml(typeLabel, inQueue)}
         </button>
       </div>
     </div>`;
 
-  header.querySelector("#btn-detail-dl-queue")?.addEventListener("click", () => {
-    const added = addToQueue({ type, id, title, sub, cover, coverRound: round });
-    if (added) {
-      appendLog(`Added ${type}/${id} to queue.`, "info");
-      activateTab("download");
+  // Ensure the in-queue class is applied if needed (querySelector after innerHTML)
+  const dlQueueBtn = header.querySelector("#btn-detail-dl-queue");
+
+  dlQueueBtn?.addEventListener("click", () => {
+    const existing = downloadQueue.findIndex(
+      (q) => q.type === type && String(q.id) === String(id)
+    );
+    if (existing !== -1) {
+      removeFromQueue(existing);
+      dlQueueBtn.className = "btn-primary";
+      dlQueueBtn.classList.remove("in-queue");
+      dlQueueBtn.innerHTML = _detailQueueBtnHtml(typeLabel, false);
+      appendLog(`Removed ${type}/${id} from queue.`, "info");
     } else {
-      appendLog(`${type}/${id} is already in the queue.`, "info");
+      const added = addToQueue({ type, id, title, sub, cover, coverRound: round });
+      if (added) {
+        dlQueueBtn.className = "btn-secondary in-queue";
+        dlQueueBtn.innerHTML = _detailQueueBtnHtml(typeLabel, true);
+        appendLog(`Added ${type}/${id} to queue.`, "info");
+      }
     }
   });
 
@@ -1733,6 +1778,18 @@ export function init() {
   $("dl-tab-progress-btn")?.addEventListener("click", () => switchDlTab("progress"));
   $("dl-tab-log-btn")?.addEventListener("click", () => switchDlTab("log"));
   $("btn-clear-log")?.addEventListener("click", clearLog);
+
+  // Toggle collapse/expand of the pinned status bar
+  $("btn-toggle-status-bar")?.addEventListener("click", () => {
+    const bar = $("dl-status-bar");
+    const btn = $("btn-toggle-status-bar");
+    if (!bar) return;
+    const nowCollapsed = bar.classList.toggle("collapsed");
+    if (btn) {
+      btn.setAttribute("aria-expanded", String(!nowCollapsed));
+      btn.setAttribute("aria-label", nowCollapsed ? "Expand status bar" : "Collapse status bar");
+    }
+  });
 
   // Download
   $("btn-download")?.addEventListener("click", handleDownload);

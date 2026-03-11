@@ -456,6 +456,39 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 }
 .btn-view-more:hover { border-color: var(--color-accent); color: var(--color-accent); }
 
+/* ─── Horizontal scroll row (library suggestions & artist detail) ─────────── */
+.result-row-section { margin-bottom: var(--sp-2); }
+
+.result-row-header {
+  display: flex; align-items: center; gap: var(--sp-3);
+  margin: var(--sp-5) 0 var(--sp-3);
+}
+.result-row-header .result-heading,
+.result-row-header .detail-section-heading { flex: 1; margin: 0; }
+
+.btn-view-all {
+  flex-shrink: 0; white-space: nowrap;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--color-accent); background: transparent;
+  border: 1px solid var(--color-border); border-radius: var(--r-full);
+  padding: 0.2rem 0.75rem; cursor: pointer;
+  transition: border-color var(--t-fast), background var(--t-fast), color var(--t-fast);
+}
+.btn-view-all:hover { border-color: var(--color-accent); background: var(--color-accent-soft); }
+
+.result-row {
+  display: flex; gap: 0.75rem;
+  overflow-x: auto; padding-bottom: 0.75rem;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; scrollbar-color: var(--color-border) transparent;
+}
+.result-row::-webkit-scrollbar { height: 4px; }
+.result-row::-webkit-scrollbar-track { background: transparent; }
+.result-row::-webkit-scrollbar-thumb {
+  background: var(--color-border); border-radius: var(--r-full);
+}
+.result-row .result-card { flex: 0 0 140px; }
+
 .searching, .no-results { color: var(--color-text-muted); font-size: 0.875rem; margin-top: var(--sp-2); }
 .error { color: var(--color-error); }
 

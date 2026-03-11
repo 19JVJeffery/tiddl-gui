@@ -10,6 +10,7 @@ import {
 } from "./auth.js";
 import {
   search,
+  getTrack,
   getArtistAlbums, getArtistSingles,
   getAlbum,
   getPlaylist,
@@ -577,6 +578,7 @@ function addUrlPill(raw) {
       cover: "", coverRound: false, fromUrl: true,
     });
     if (!added) return false; // duplicate
+    enrichQueueItemFromUrl(resource.type, resource.id);
   }
 
   const pillBox = $("url-pill-box");
@@ -607,6 +609,47 @@ function addUrlPill(raw) {
     appendLog(`Could not parse "${trimmed}" as a Tidal URL.`, "warn");
   }
   return isValid;
+}
+
+/**
+ * After adding a URL-based queue item, asynchronously fetch its real metadata
+ * (title, artist, cover) from the API and update the queue display.
+ */
+async function enrichQueueItemFromUrl(type, id) {
+  if (!isLoggedIn()) return;
+  try {
+    let title = "", sub = "", cover = "";
+    if (type === "track") {
+      const data = await getTrack(id);
+      title = data.title || "";
+      sub   = data.artist?.name || "";
+      cover = coverUrl(data.album?.cover);
+    } else if (type === "album") {
+      const data = await getAlbum(id);
+      title = data.title || "";
+      sub   = data.artist?.name || "";
+      cover = coverUrl(data.cover);
+    } else if (type === "playlist") {
+      const data = await getPlaylist(id);
+      title = data.title || "";
+      sub   = data.creator?.name || "Tidal";
+      cover = coverUrl(data.image || data.squareImage);
+    } else {
+      return; // artist / mix / video — no enrichment needed here
+    }
+    if (!title) return;
+    const item = downloadQueue.find(
+      (q) => q.type === type && String(q.id) === String(id) && q.fromUrl
+    );
+    if (item) {
+      item.title = title;
+      item.sub   = sub;
+      item.cover = cover;
+      renderQueue();
+    }
+  } catch {
+    // Silently fail — the URL/ID placeholder remains visible
+  }
 }
 
 function initUrlPillInput() {
@@ -808,6 +851,47 @@ function buildResultGrid(items, type, shownCount, totalCount) {
   return html;
 }
 
+/**
+ * Build a horizontally-scrollable single-row section for a set of items.
+ * Used in "From your library" suggestions and artist detail panels.
+ * @param {Array}  items       - Array of Tidal resource objects
+ * @param {string} type        - "tracks" | "albums" | "artists" | "playlists"
+ * @param {string} heading     - Display heading text
+ * @param {string} viewAllKey  - Unique key written to data-viewall on the button
+ */
+function buildResultRowSection(items, type, heading, viewAllKey) {
+  if (!items.length) return "";
+  let cardsHtml = "";
+  for (const item of items) {
+    let id, title, sub, cover, round = false;
+    if (type === "tracks") {
+      id = item.id; title = item.title; sub = item.artist?.name || "";
+      cover = coverUrl(item.album?.cover);
+    } else if (type === "albums") {
+      id = item.id; title = item.title; sub = item.artist?.name || "";
+      cover = coverUrl(item.cover);
+    } else if (type === "artists") {
+      id = item.id; title = item.name; sub = "Artist";
+      cover = coverUrl(item.picture); round = true;
+    } else if (type === "playlists") {
+      id = item.uuid; title = item.title; sub = item.creator?.name || "Tidal";
+      cover = coverUrl(item.image || item.squareImage);
+    }
+    const resourceType = type === "tracks" ? "track"
+      : type === "albums" ? "album"
+      : type === "artists" ? "artist"
+      : "playlist";
+    cardsHtml += buildResultCard(resourceType, id, title, sub, cover, round);
+  }
+  return `<div class="result-row-section">
+    <div class="result-row-header">
+      <h3 class="result-heading">${escHtml(heading)}</h3>
+      <button class="btn-view-all" data-viewall="${escHtml(viewAllKey)}">View all</button>
+    </div>
+    <div class="result-row">${cardsHtml}</div>
+  </div>`;
+}
+
 function renderSearchResults(data, filter = "all") {
   const container = $("search-results");
   if (!container) return;
@@ -957,11 +1041,22 @@ async function showSearchSuggestions() {
       container.innerHTML = '<p class="no-results">Search for tracks, albums, artists or playlists above.</p>';
       return;
     }
-    let html = '<p class="result-heading" style="margin-top:0">From your library</p>';
-    if (tracks.length) html += buildResultGrid(tracks, "tracks", 8, tracks.length);
-    if (albums.length) html += buildResultGrid(albums, "albums", 8, albums.length);
+    let html = '<h3 class="result-heading" style="margin-top:0">From your library</h3>';
+    if (tracks.length) html += buildResultRowSection(tracks, "tracks", "Tracks", "lib-tracks");
+    if (albums.length) html += buildResultRowSection(albums, "albums", "Albums", "lib-albums");
     container.innerHTML = html;
     attachResultHandlers(container);
+    // "View all" navigates to the Library tab with the matching section
+    const goToLibrarySection = (section) => {
+      _librarySection = section;
+      document.querySelectorAll("#library-section-pills .type-pill").forEach((p) =>
+        p.classList.toggle("active", p.dataset.section === section)
+      );
+      activateTab("library");
+      loadLibraryIfNeeded();
+    };
+    container.querySelector('[data-viewall="lib-tracks"]')?.addEventListener("click", () => goToLibrarySection("tracks"));
+    container.querySelector('[data-viewall="lib-albums"]')?.addEventListener("click", () => goToLibrarySection("albums"));
   } catch {
     container.innerHTML = '<p class="no-results">Search for tracks, albums, artists or playlists above.</p>';
   }
@@ -1031,20 +1126,44 @@ async function renderArtistDetail(artistId, artistName, body) {
   const albums  = albumsData.items  || [];
   const singles = singlesData.items || [];
 
-  function albumGrid(items) {
-    if (!items.length) return "";
-    return `<div class="detail-album-grid">${items.map((album) => {
+  function makeAlbumCards(items) {
+    return items.map((album) => {
       const c = coverUrl(album.cover);
       return buildResultCard("album", album.id, album.title, album.releaseDate?.slice(0,4) || "", c, false);
-    }).join("")}</div>`;
+    }).join("");
+  }
+
+  function buildArtistSection(items, heading, sectionKey) {
+    if (!items.length) return "";
+    const cardsHtml = makeAlbumCards(items);
+    return `<div class="artist-release-section" data-section="${escHtml(sectionKey)}">
+      <div class="result-row-header">
+        <p class="detail-section-heading" style="margin:0">${escHtml(heading)}</p>
+        <button class="btn-view-all" data-viewall="${escHtml(sectionKey)}">View all (${items.length})</button>
+      </div>
+      <div class="result-row">${cardsHtml}</div>
+      <div class="detail-album-grid hidden">${cardsHtml}</div>
+    </div>`;
   }
 
   let html = "";
-  if (albums.length)  html += `<p class="detail-section-heading">Albums</p>${albumGrid(albums)}`;
-  if (singles.length) html += `<p class="detail-section-heading">Singles &amp; EPs</p>${albumGrid(singles)}`;
+  if (albums.length)  html += buildArtistSection(albums,  "Albums",        "albums");
+  if (singles.length) html += buildArtistSection(singles, "Singles & EPs",  "singles");
   if (!html)          html  = `<p class="no-results">No releases found for this artist.</p>`;
 
   body.innerHTML = html;
+
+  // "View all" swaps the horizontal row for the full grid
+  body.querySelectorAll(".artist-release-section .btn-view-all").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const section = btn.closest(".artist-release-section");
+      if (!section) return;
+      section.querySelector(".result-row")?.classList.add("hidden");
+      section.querySelector(".detail-album-grid")?.classList.remove("hidden");
+      btn.remove();
+    });
+  });
+
   attachResultHandlers(body);
 }
 

@@ -64,3 +64,7 @@ python3 -m http.server 8080 --directory web
 ```
 
 Open <http://localhost:8080>. Any static file server works (`npx serve web`, `npx http-server web`, etc.).
+
+## Credits
+
+tiddl-gui is a browser-based GUI built on top of the original [**tiddl**](https://github.com/oskvr37/tiddl) command-line tool by [oskvr37](https://github.com/oskvr37). The API integration and download logic are inspired by that project.

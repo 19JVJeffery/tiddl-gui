@@ -742,6 +742,98 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 }
 .result-card.selected .result-title { color: var(--color-accent); }
 
+/* ─── Download status panel (progress / log tabs) ────────────────────────── */
+.dl-status-panel {
+  border: 1px solid var(--color-border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: var(--sp-4);
+  background: var(--color-surface);
+}
+
+.dl-status-tabs {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0.3rem 0.4rem;
+  background: var(--color-surface-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.dl-tab-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.22rem 0.65rem; border-radius: var(--r-sm);
+  font-size: 0.75rem; font-weight: 500;
+  color: var(--color-text-muted);
+  background: transparent; border: none; cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.dl-tab-btn:hover { background: var(--color-surface-3); color: var(--color-text); }
+.dl-tab-btn.active { background: var(--color-surface-3); color: var(--color-text); font-weight: 600; }
+
+.dl-tab-spacer { flex: 1; }
+.dl-clear-log-btn { font-size: 0.72rem; padding: 0.18rem 0.65rem; }
+
+.dl-status-view { display: flex; flex-direction: column; }
+.dl-status-view.hidden { display: none; }
+
+/* Progress view: overall bar + label */
+.dl-status-view > .progress-section { padding: 0.55rem 0.75rem 0.4rem; margin-bottom: 0; }
+
+/* Per-item progress rows */
+.dl-item-progress-list { max-height: 220px; overflow-y: auto; }
+
+.dl-item-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  border-top: 1px solid var(--color-border-soft);
+  transition: background var(--t-fast);
+}
+.dl-item-row--active  { background: var(--color-accent-soft); }
+.dl-item-row--done    { background: rgba(79,208,140,.06); }
+.dl-item-row--failed  { background: var(--color-error-soft); }
+
+.dl-item-thumb {
+  width: 32px; height: 32px; border-radius: 4px;
+  object-fit: cover; background: var(--color-surface-3);
+  flex-shrink: 0;
+}
+.dl-item-thumb.round { border-radius: 50%; }
+
+.dl-item-details { flex: 1; min-width: 0; }
+.dl-item-title {
+  font-size: 0.78rem; font-weight: 500; color: var(--color-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.dl-item-msg {
+  font-size: 0.69rem; color: var(--color-text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.dl-item-bar-track {
+  height: 3px; border-radius: 9999px;
+  background: var(--color-surface-3); overflow: hidden;
+}
+.dl-item-bar-fill {
+  height: 100%; border-radius: 9999px; width: 0%;
+  background: var(--color-accent);
+  transition: width 0.35s cubic-bezier(.4,0,.2,1);
+}
+.dl-item-row--done   .dl-item-bar-fill { background: var(--color-success); }
+.dl-item-row--failed .dl-item-bar-fill { background: var(--color-error); }
+
+.dl-item-icon {
+  font-size: 0.85rem; flex-shrink: 0;
+  width: 20px; text-align: center; color: var(--color-text-muted);
+}
+.dl-item-row--done   .dl-item-icon { color: var(--color-success); }
+.dl-item-row--failed .dl-item-icon { color: var(--color-error); }
+
+/* Log view: the log box sits flush inside the view */
+.dl-status-view > .log-box {
+  border: none; border-radius: 0; height: 220px;
+  background: var(--color-surface);
+}
+
 /* ─── Log section (collapsible) ──────────────────────────────────────────── */
 .log-section { margin-bottom: var(--sp-3); }
 .log-header {

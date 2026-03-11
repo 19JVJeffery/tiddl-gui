@@ -1643,7 +1643,68 @@ function updateThemeIcon() {
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
+// ─── Tooltips ─────────────────────────────────────────────────────────────────
+
+function initTooltips() {
+  const box = document.createElement("div");
+  box.className = "tip-box";
+  box.setAttribute("role", "tooltip");
+  document.body.appendChild(box);
+
+  function positionAndShow(el) {
+    box.textContent = el.dataset.tip;
+    // Measure while hidden (visibility:hidden keeps layout but hides paint)
+    box.style.visibility = "hidden";
+    box.classList.add("visible");
+    const bw = box.offsetWidth;
+    const bh = box.offsetHeight;
+    box.classList.remove("visible");
+    box.style.visibility = "";
+
+    const r   = el.getBoundingClientRect();
+    const gap = 8;
+    // Prefer above the element; flip below if not enough room
+    let top = r.top - bh - gap;
+    if (top < gap) top = r.bottom + gap;
+    const left = Math.max(gap, Math.min(r.left, window.innerWidth - bw - gap));
+    box.style.top  = `${top}px`;
+    box.style.left = `${left}px`;
+    box.classList.add("visible");
+  }
+
+  function hide() { box.classList.remove("visible"); }
+
+  // Mouse: show on hover of any [data-tip] element
+  document.addEventListener("mouseover", (e) => {
+    const el = e.target.closest("[data-tip]");
+    if (el) positionAndShow(el);
+  });
+  document.addEventListener("mouseout", (e) => {
+    if (!e.relatedTarget?.closest("[data-tip]")) hide();
+  });
+
+  // Keyboard: show on focus, hide on blur/Escape
+  document.addEventListener("focusin", (e) => {
+    const el = e.target.closest("[data-tip]");
+    if (el) positionAndShow(el);
+  });
+  document.addEventListener("focusout", (e) => {
+    if (!e.relatedTarget?.closest("[data-tip]")) hide();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hide();
+  });
+
+  // Prevent `.tip` spans inside <label> elements from toggling their checkbox.
+  // The capture phase intercepts the click before it bubbles to the label.
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".tip")) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+}
+
 export function init() {
+  initTooltips();
+
   // Apply stored appearance
   const theme = getTheme();
   applyTheme(theme);

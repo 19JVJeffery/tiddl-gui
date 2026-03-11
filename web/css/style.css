@@ -613,6 +613,40 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 /* ─── Divider ─────────────────────────────────────────────────────────────── */
 .divider { border: none; border-top: 1px solid var(--color-border); margin: var(--sp-4) 0; }
 
+/* ─── Inline tooltip `?` icon ────────────────────────────────────────────── */
+.tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--color-surface-3); color: var(--color-text-subtle);
+  font-size: 0.6rem; font-weight: 800; line-height: 1;
+  cursor: help; border: 1px solid var(--color-border);
+  flex-shrink: 0; vertical-align: middle; margin-left: 4px;
+  user-select: none;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+}
+.tip:hover, .tip:focus-visible {
+  background: var(--color-accent-soft); color: var(--color-accent);
+  border-color: var(--color-accent); outline: none;
+}
+
+/* Floating tooltip box — positioned via JS as position:fixed to escape overflow containers */
+.tip-box {
+  position: fixed; z-index: 9999;
+  max-width: 260px; padding: 0.5rem 0.7rem;
+  background: var(--color-surface-3); color: var(--color-text);
+  border: 1px solid var(--color-border); border-radius: var(--r);
+  font-size: 0.78rem; line-height: 1.55;
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  opacity: 0; visibility: hidden;
+  transition: opacity var(--t-fast), visibility 0s var(--t-fast);
+  white-space: normal; word-break: normal;
+}
+.tip-box.visible {
+  opacity: 1; visibility: visible;
+  transition: opacity var(--t-fast), visibility 0s;
+}
+
 /* ─── Spinner ─────────────────────────────────────────────────────────────── */
 .spinner {
   display: inline-block; width: 13px; height: 13px;

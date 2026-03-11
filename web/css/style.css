@@ -529,6 +529,7 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .result-info { padding: 0.45rem 0.55rem 0.6rem; }
 .result-title { display: block; font-size: 0.8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .result-sub   { display: block; font-size: 0.72rem; color: var(--color-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.result-info .quality-pill-sm { margin-top: 5px; }
 
 .view-more-wrap { text-align: center; margin: var(--sp-3) 0 var(--sp-2); }
 .btn-view-more {

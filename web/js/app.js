@@ -42,6 +42,17 @@ const QUALITY_LABELS = {
   LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",
 };
 
+/** Returns HTML for a small quality pill, or empty string when quality is unknown. */
+function qualityPill(quality) {
+  if (!quality || !QUALITY_LABELS[quality]) return "";
+  return `<span class="quality-pill-sm" data-quality="${escHtml(quality)}">${escHtml(QUALITY_LABELS[quality])}</span>`;
+}
+
+/** Returns the display title for a track, appending the version in parentheses when present. */
+function formatTrackTitle(track) {
+  return track.version ? `${track.title} (${track.version})` : track.title;
+}
+
 /**
  * File extensions that are binary formats where reading as UTF-8 text is
  * unreliable and Tidal URL extraction will likely fail.
@@ -976,7 +987,7 @@ function showSearchHistory() {
   show(histEl);
 }
 
-function buildResultCard(resourceType, id, title, sub, cover, round) {
+function buildResultCard(resourceType, id, title, sub, cover, round, quality = null) {
   const inQueue = downloadQueue.some(
     (q) => q.type === resourceType && String(q.id) === String(id)
   );
@@ -1013,6 +1024,7 @@ function buildResultCard(resourceType, id, title, sub, cover, round) {
     <div class="result-info">
       <span class="result-title">${escHtml(title)}</span>
       <span class="result-sub">${escHtml(sub)}</span>
+      ${quality ? qualityPill(quality) : ""}
     </div>
   </div>`;
 }
@@ -1025,13 +1037,13 @@ function buildResultGrid(items, type, shownCount, totalCount) {
     <div class="result-grid">`;
 
   for (const item of items.slice(0, shownCount)) {
-    let id, title, sub, cover, round = false;
+    let id, title, sub, cover, round = false, quality = null;
     if (type === "tracks") {
-      id = item.id; title = item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.album?.cover);
+      id = item.id; title = formatTrackTitle(item); sub = item.artist?.name || "";
+      cover = coverUrl(item.album?.cover); quality = item.audioQuality;
     } else if (type === "albums") {
       id = item.id; title = item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.cover);
+      cover = coverUrl(item.cover); quality = item.audioQuality;
     } else if (type === "artists") {
       id = item.id; title = item.name; sub = "Artist";
       cover = coverUrl(item.picture); round = true;
@@ -1043,7 +1055,7 @@ function buildResultGrid(items, type, shownCount, totalCount) {
       : type === "albums" ? "album"
       : type === "artists" ? "artist"
       : "playlist";
-    html += buildResultCard(resourceType, id, title, sub, cover, round);
+    html += buildResultCard(resourceType, id, title, sub, cover, round, quality);
   }
 
   html += `</div>`;
@@ -1070,13 +1082,13 @@ function buildResultRowSection(items, type, heading, viewAllKey) {
   if (!items.length) return "";
   let cardsHtml = "";
   for (const item of items) {
-    let id, title, sub, cover, round = false;
+    let id, title, sub, cover, round = false, quality = null;
     if (type === "tracks") {
-      id = item.id; title = item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.album?.cover);
+      id = item.id; title = formatTrackTitle(item); sub = item.artist?.name || "";
+      cover = coverUrl(item.album?.cover); quality = item.audioQuality;
     } else if (type === "albums") {
       id = item.id; title = item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.cover);
+      cover = coverUrl(item.cover); quality = item.audioQuality;
     } else if (type === "artists") {
       id = item.id; title = item.name; sub = "Artist";
       cover = coverUrl(item.picture); round = true;
@@ -1088,7 +1100,7 @@ function buildResultRowSection(items, type, heading, viewAllKey) {
       : type === "albums" ? "album"
       : type === "artists" ? "artist"
       : "playlist";
-    cardsHtml += buildResultCard(resourceType, id, title, sub, cover, round);
+    cardsHtml += buildResultCard(resourceType, id, title, sub, cover, round, quality);
   }
   return `<div class="result-row-section">
     <div class="result-row-header">
@@ -1357,7 +1369,7 @@ async function renderArtistDetail(artistId, artistName, body) {
   function makeAlbumCards(items) {
     return items.map((album) => {
       const c = coverUrl(album.cover);
-      return buildResultCard("album", album.id, album.title, album.releaseDate?.slice(0,4) || "", c, false);
+      return buildResultCard("album", album.id, album.title, album.releaseDate?.slice(0,4) || "", c, false, album.audioQuality);
     }).join("");
   }
 
@@ -1422,14 +1434,16 @@ async function renderAlbumDetail(albumId, body) {
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
     const coverArt = coverUrl(albumMeta.cover);
+    const displayTitle = formatTrackTitle(t);
     return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
-        data-title="${escHtml(t.title)}" data-artist="${escHtml(t.artist?.name || "")}"
+        data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
         data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
       <span class="detail-track-num">${i + 1}</span>
       <div class="detail-track-info">
-        <span class="detail-track-title">${escHtml(t.title)}</span>
+        <span class="detail-track-title">${escHtml(displayTitle)}</span>
         <span class="detail-track-artist">${escHtml(t.artist?.name || "")}</span>
       </div>
+      ${qualityPill(t.audioQuality)}
       <button class="detail-track-add" title="Add to queue">
         ${inQ ? "\u2713 Added" : "+ Add"}
       </button>
@@ -1469,14 +1483,16 @@ async function renderPlaylistDetail(playlistId, body) {
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
     const coverArt = coverUrl(t.album?.cover);
+    const displayTitle = formatTrackTitle(t);
     return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
-        data-title="${escHtml(t.title)}" data-artist="${escHtml(t.artist?.name || "")}"
+        data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
         data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
       <span class="detail-track-num">${i + 1}</span>
       <div class="detail-track-info">
-        <span class="detail-track-title">${escHtml(t.title)}</span>
+        <span class="detail-track-title">${escHtml(displayTitle)}</span>
         <span class="detail-track-artist">${escHtml(t.artist?.name || "")}</span>
       </div>
+      ${qualityPill(t.audioQuality)}
       <button class="detail-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
     </div>`;
   }).join("")}</div>`;
@@ -1624,14 +1640,16 @@ function renderLibraryContent(items) {
       const dateLabel = _librarySort === "dateAdded" && t._dateAdded
         ? (t._dateAdded.length >= 10 ? t._dateAdded.slice(0, 10) : t._dateAdded)
         : "";
+      const displayTitle = formatTrackTitle(t);
       return `<div class="library-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
-          data-title="${escHtml(t.title)}" data-artist="${escHtml(t.artist?.name || "")}"
+          data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
           data-cover="${escHtml(coverUrl(t.album?.cover))}" tabindex="0" role="button">
         ${cover ? `<img src="${escHtml(cover)}" class="library-track-thumb" alt="" loading="lazy"/>` : `<div class="library-track-thumb"></div>`}
         <div class="library-track-info">
-          <span class="library-track-title">${escHtml(t.title)}</span>
+          <span class="library-track-title">${escHtml(displayTitle)}</span>
           <span class="library-track-artist">${escHtml(t.artist?.name || "")}</span>
         </div>
+        ${qualityPill(t.audioQuality)}
         ${dateLabel ? `<span class="library-track-date">${escHtml(dateLabel)}</span>` : ""}
         <button class="library-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
       </div>`;
@@ -1667,7 +1685,8 @@ function renderLibraryContent(items) {
       const title = item.title || item.name || "";
       const sub   = type === "album" ? (item.artist?.name || "") : (item.creator?.name || "Tidal");
       const cover = coverUrl(type === "album" ? item.cover : (item.image || item.squareImage));
-      html += buildResultCard(type, id, title, sub, cover, false);
+      const quality = type === "album" ? item.audioQuality : null;
+      html += buildResultCard(type, id, title, sub, cover, false, quality);
     }
     html += `</div>`;
     content.innerHTML = html;

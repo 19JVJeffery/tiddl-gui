@@ -6,7 +6,7 @@
  * tiddl/core/utils/download.py.
  */
 
-import { proxied } from "./config.js";
+import { proxied, getMetadataCover, getCoverSize } from "./config.js";
 import { getTrackStream, getVideoStream, getTrack, getAlbum, getAlbumItems, getPlaylist, getPlaylistItems, getMixItems, getArtistAlbums, getArtistSingles } from "./api.js";
 
 /** Delay (ms) before revoking an object URL after triggering a download. */
@@ -176,6 +176,209 @@ function sanitize(name) {
   return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").trim().slice(0, MAX_FILENAME_LENGTH);
 }
 
+// ─── Cover art helpers ─────────────────────────────────────────────────────
+
+/**
+ * Fetch cover art JPEG bytes from the Tidal image CDN.
+ * Tries a direct request first; falls back to the configured CORS proxy.
+ * Returns null on any failure so callers can silently skip embedding.
+ *
+ * @param {string} coverHash  UUID-style hash from track.album.cover,
+ *                            e.g. "12345678-1234-1234-1234-123456789012"
+ * @param {number} size       Square image size in pixels (default 1280)
+ * @returns {Promise<Uint8Array|null>}
+ */
+async function fetchCoverArt(coverHash, size = 1280) {
+  if (!coverHash) return null;
+  const url = `https://resources.tidal.com/images/${coverHash.replace(/-/g, "/")}/${size}x${size}.jpg`;
+  try {
+    let res = await fetch(url);
+    if (!res.ok) {
+      const proxiedUrl = proxied(url);
+      if (proxiedUrl !== url) res = await fetch(proxiedUrl);
+    }
+    if (res.ok) return new Uint8Array(await res.arrayBuffer());
+  } catch { /* ignore — cover embedding is best-effort */ }
+  return null;
+}
+
+/**
+ * Inject a JPEG image as a METADATA_BLOCK_PICTURE into a FLAC file.
+ * Appends the PICTURE block (type 6) as the new last metadata block,
+ * replacing the "last" flag that was on the previous final block.
+ *
+ * @param {Uint8Array} flacData  Raw FLAC file bytes
+ * @param {Uint8Array} jpegBytes JPEG image bytes
+ * @returns {Uint8Array} New FLAC bytes with cover embedded (or original on error)
+ */
+function injectFlacCover(flacData, jpegBytes) {
+  // Verify "fLaC" signature
+  if (flacData[0] !== 0x66 || flacData[1] !== 0x4C ||
+      flacData[2] !== 0x61 || flacData[3] !== 0x43) {
+    return flacData;
+  }
+
+  const mimeBytes = new TextEncoder().encode("image/jpeg");
+  const pictureDataSize =
+    4 +                    // picture type
+    4 + mimeBytes.length + // MIME type length + bytes
+    4 +                    // description length (0)
+    4 + 4 + 4 + 4 +        // width, height, depth, color count
+    4 + jpegBytes.length;  // data length + data
+
+  const pictureData = new Uint8Array(pictureDataSize);
+  const pv = new DataView(pictureData.buffer);
+  let off = 0;
+  pv.setUint32(off, 3, false); off += 4;                    // type: front cover
+  pv.setUint32(off, mimeBytes.length, false); off += 4;
+  pictureData.set(mimeBytes, off); off += mimeBytes.length;
+  pv.setUint32(off, 0, false); off += 4;                    // description length = 0
+  pv.setUint32(off, 0, false); off += 4;                    // width  (unknown)
+  pv.setUint32(off, 0, false); off += 4;                    // height (unknown)
+  pv.setUint32(off, 24, false); off += 4;                   // color depth
+  pv.setUint32(off, 0, false); off += 4;                    // indexed colors
+  pv.setUint32(off, jpegBytes.length, false); off += 4;     // data length
+  pictureData.set(jpegBytes, off);
+
+  // Walk the metadata-block chain to find the last block
+  let pos = 4;
+  let lastBlockStart = 4;
+  while (pos + 4 <= flacData.length) {
+    lastBlockStart = pos;
+    const header = flacData[pos];
+    const blockLen = (flacData[pos + 1] << 16) | (flacData[pos + 2] << 8) | flacData[pos + 3];
+    pos += 4 + blockLen;
+    if (header & 0x80) break; // isLast
+  }
+  const metadataEnd = pos; // start of audio data
+
+  // Assemble new file: metadata (last flag cleared) + PICTURE block + audio
+  const result = new Uint8Array(flacData.length + 4 + pictureDataSize);
+  result.set(flacData.slice(0, metadataEnd));
+  result[lastBlockStart] = flacData[lastBlockStart] & 0x7F; // clear "last" flag
+
+  result[metadataEnd]     = 0x80 | 6;                           // last=1, type=PICTURE
+  result[metadataEnd + 1] = (pictureDataSize >> 16) & 0xFF;
+  result[metadataEnd + 2] = (pictureDataSize >>  8) & 0xFF;
+  result[metadataEnd + 3] =  pictureDataSize        & 0xFF;
+  result.set(pictureData, metadataEnd + 4);
+  result.set(flacData.slice(metadataEnd), metadataEnd + 4 + pictureDataSize);
+
+  return result;
+}
+
+// ── M4A / MPEG-4 helpers ────────────────────────────────────────────────────
+
+function _readU32BE(data, off) {
+  return (data[off] * 0x1000000) +
+         ((data[off + 1] << 16) | (data[off + 2] << 8) | data[off + 3]);
+}
+
+function _writeU32BE(data, off, v) {
+  data[off]     = (v >>> 24) & 0xFF;
+  data[off + 1] = (v >>> 16) & 0xFF;
+  data[off + 2] = (v >>>  8) & 0xFF;
+  data[off + 3] =  v         & 0xFF;
+}
+
+/**
+ * Find the first MP4 box of the given 4-char type within [start, end).
+ * Returns { start, size } or null.
+ */
+function _findBox(data, type, start, end) {
+  let pos = start;
+  while (pos + 8 <= end) {
+    const size = _readU32BE(data, pos);
+    if (size < 8 || pos + size > end) break;
+    const t = String.fromCharCode(data[pos+4], data[pos+5], data[pos+6], data[pos+7]);
+    if (t === type) return { start: pos, size };
+    pos += size;
+  }
+  return null;
+}
+
+/**
+ * Inject a JPEG image as a 'covr' atom into an M4A (MPEG-4) file.
+ * Locates the moov > udta > meta > ilst hierarchy and inserts/replaces
+ * the 'covr' atom.  All ancestor box sizes are updated accordingly.
+ *
+ * @param {Uint8Array} m4aData   Raw M4A file bytes
+ * @param {Uint8Array} jpegBytes JPEG image bytes
+ * @returns {Uint8Array} New M4A bytes with cover embedded (or original on error)
+ */
+function injectM4aCover(m4aData, jpegBytes) {
+  // Build the covr atom:  covr [ data [ type=JPEG + locale=0 + jpegBytes ] ]
+  const dataAtomSize = 8 + 4 + 4 + jpegBytes.length; // hdr + type + locale + data
+  const covrAtomSize = 8 + dataAtomSize;
+  const covrAtom = new Uint8Array(covrAtomSize);
+  const cv = new DataView(covrAtom.buffer);
+  let off = 0;
+  cv.setUint32(off, covrAtomSize, false); off += 4;
+  covrAtom.set([0x63, 0x6F, 0x76, 0x72], off); off += 4; // "covr"
+  cv.setUint32(off, dataAtomSize, false); off += 4;
+  covrAtom.set([0x64, 0x61, 0x74, 0x61], off); off += 4; // "data"
+  cv.setUint32(off, 0x0000000D, false); off += 4;         // type: JPEG
+  cv.setUint32(off, 0, false); off += 4;                  // locale
+  covrAtom.set(jpegBytes, off);
+
+  // Locate the atom hierarchy
+  const moov = _findBox(m4aData, "moov", 0, m4aData.length);
+  if (!moov) return m4aData;
+
+  const udta = _findBox(m4aData, "udta", moov.start + 8, moov.start + moov.size);
+  if (!udta) return m4aData;
+
+  // 'meta' is a FullBox — its data starts 4 bytes after the regular header (version+flags)
+  const meta = _findBox(m4aData, "meta", udta.start + 8, udta.start + udta.size);
+  if (!meta) return m4aData;
+
+  const ilst = _findBox(m4aData, "ilst", meta.start + 12, meta.start + meta.size);
+  if (!ilst) return m4aData;
+
+  // Find any existing 'covr' to replace, or insert at end of ilst
+  const existingCovr = _findBox(m4aData, "covr", ilst.start + 8, ilst.start + ilst.size);
+
+  let result;
+  let delta;
+  if (existingCovr) {
+    delta = covrAtom.length - existingCovr.size;
+    result = new Uint8Array(m4aData.length + delta);
+    result.set(m4aData.slice(0, existingCovr.start));
+    result.set(covrAtom, existingCovr.start);
+    result.set(m4aData.slice(existingCovr.start + existingCovr.size),
+               existingCovr.start + covrAtom.length);
+  } else {
+    // Append covr at the end of ilst
+    delta = covrAtom.length;
+    const insertPos = ilst.start + ilst.size;
+    result = new Uint8Array(m4aData.length + delta);
+    result.set(m4aData.slice(0, insertPos));
+    result.set(covrAtom, insertPos);
+    result.set(m4aData.slice(insertPos), insertPos + covrAtom.length);
+  }
+
+  // Update ancestor box sizes (their start positions are unchanged — all precede the edit)
+  _writeU32BE(result, ilst.start, _readU32BE(result, ilst.start) + delta);
+  _writeU32BE(result, meta.start, _readU32BE(result, meta.start) + delta);
+  _writeU32BE(result, udta.start, _readU32BE(result, udta.start) + delta);
+  _writeU32BE(result, moov.start, _readU32BE(result, moov.start) + delta);
+
+  return result;
+}
+
+/**
+ * Embed cover art into audio data.
+ * @param {Uint8Array} data      Raw audio bytes
+ * @param {string}     extension ".flac" or ".m4a"
+ * @param {Uint8Array} cover     JPEG cover bytes
+ * @returns {Uint8Array}
+ */
+function embedCoverArt(data, extension, cover) {
+  if (extension === ".flac") return injectFlacCover(data, cover);
+  if (extension === ".m4a")  return injectM4aCover(data, cover);
+  return data;
+}
+
 // ─── ZIP timestamp helpers ─────────────────────────────────────────────────
 
 /**
@@ -311,7 +514,7 @@ function buildZip(files) {
  * save.  Used internally by downloadTrack and the multi-track ZIP bundlers.
  *
  * @returns {{ data: Uint8Array, extension: string, title: string,
- *             artist: string, trackNumber: number }}
+ *             artist: string, trackNumber: number, coverHash: string|null }}
  */
 async function fetchTrackData(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
@@ -319,6 +522,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
   const title = sanitize(track.title || String(trackId));
   const artist = sanitize(track.artist?.name || "Unknown Artist");
   const trackNumber = track.trackNumber || 0;
+  const coverHash = track.album?.cover || null;
 
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
   const streamInfo = await getTrackStream(trackId, quality);
@@ -335,7 +539,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
     onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
   );
 
-  return { data, extension, title, artist, trackNumber };
+  return { data, extension, title, artist, trackNumber, coverHash };
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────
@@ -349,7 +553,12 @@ async function fetchTrackData(trackId, quality, onProgress) {
  */
 export async function downloadTrack(trackId, quality = "HIGH", onProgress) {
   try {
-    const { data, extension, title, artist } = await fetchTrackData(trackId, quality, onProgress);
+    let { data, extension, title, artist, coverHash } = await fetchTrackData(trackId, quality, onProgress);
+    if (getMetadataCover() && coverHash) {
+      onProgress?.(0, 1, "Fetching cover art…");
+      const cover = await fetchCoverArt(coverHash, getCoverSize());
+      if (cover) data = embedCoverArt(data, extension, cover);
+    }
     const filename = `${artist} - ${title}${extension}`;
     triggerDownload(data, filename, extToMime(extension));
     return { filename, success: true };
@@ -374,6 +583,13 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
     const albumArtist = sanitize(albumMeta.artist?.name || "Unknown Artist");
     const folder = `${albumArtist} - ${albumTitle}`;
 
+    // Fetch album cover once for all tracks (best-effort)
+    let albumCover = null;
+    if (getMetadataCover() && albumMeta.cover) {
+      onProgress?.(0, 1, "Fetching cover art…");
+      albumCover = await fetchCoverArt(albumMeta.cover, getCoverSize());
+    }
+
     const items = (itemsData.items || []).filter((i) => i.type === "track");
     const zipFiles = [];
     const results = [];
@@ -387,9 +603,11 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
           onProgress?.(i, items.length, msg);
           onSubItemProgress?.(i, items.length, track.title, d, t, "active");
         });
+        let trackData = td.data;
+        if (albumCover) trackData = embedCoverArt(td.data, td.extension, albumCover);
         const num = String(td.trackNumber || (i + 1)).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
-        zipFiles.push({ name: fname, data: td.data });
+        zipFiles.push({ name: fname, data: trackData });
         results.push({ filename: fname, success: true });
         onSubItemProgress?.(i, items.length, td.title || track.title, 1, 1, "done");
       } catch (err) {
@@ -428,6 +646,8 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
     const items = (itemsData.items || []).filter((i) => i.type === "track");
     const zipFiles = [];
     const results = [];
+    // Cache cover art per hash to avoid redundant fetches across tracks
+    const coverCache = new Map();
 
     for (let i = 0; i < items.length; i++) {
       const track = items[i].item;
@@ -438,9 +658,18 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
           onProgress?.(i, items.length, msg);
           onSubItemProgress?.(i, items.length, track.title, d, t, "active");
         });
+        let trackData = td.data;
+        if (getMetadataCover() && td.coverHash) {
+          if (!coverCache.has(td.coverHash)) {
+            const fetched = await fetchCoverArt(td.coverHash, getCoverSize());
+            if (fetched) coverCache.set(td.coverHash, fetched);
+          }
+          const cover = coverCache.get(td.coverHash);
+          if (cover) trackData = embedCoverArt(td.data, td.extension, cover);
+        }
         const num = String(i + 1).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
-        zipFiles.push({ name: fname, data: td.data });
+        zipFiles.push({ name: fname, data: trackData });
         results.push({ filename: fname, success: true });
         onSubItemProgress?.(i, items.length, td.title || track.title, 1, 1, "done");
       } catch (err) {
@@ -474,6 +703,7 @@ export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItem
     const items = (itemsData.items || []).filter((i) => i.type === "track");
     const zipFiles = [];
     const results = [];
+    const coverCache = new Map();
 
     for (let i = 0; i < items.length; i++) {
       const track = items[i].item;
@@ -484,9 +714,18 @@ export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItem
           onProgress?.(i, items.length, msg);
           onSubItemProgress?.(i, items.length, track.title, d, t, "active");
         });
+        let trackData = td.data;
+        if (getMetadataCover() && td.coverHash) {
+          if (!coverCache.has(td.coverHash)) {
+            const fetched = await fetchCoverArt(td.coverHash, getCoverSize());
+            if (fetched) coverCache.set(td.coverHash, fetched);
+          }
+          const cover = coverCache.get(td.coverHash);
+          if (cover) trackData = embedCoverArt(td.data, td.extension, cover);
+        }
         const num = String(i + 1).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
-        zipFiles.push({ name: fname, data: td.data });
+        zipFiles.push({ name: fname, data: trackData });
         results.push({ filename: fname, success: true });
         onSubItemProgress?.(i, items.length, td.title || track.title, 1, 1, "done");
       } catch (err) {

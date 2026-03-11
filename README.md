@@ -1,13 +1,38 @@
+<div align="center">
+
 # tiddl-gui
 
-> Download Tidal tracks, albums, and playlists at maximum quality — straight from your browser.
+**Download Tidal tracks, albums, and playlists at maximum quality — straight from your browser.**
+
+[![Live App](https://img.shields.io/badge/Live%20App-Open%20Now-4fd08c?style=for-the-badge&logo=github&logoColor=white)](https://19jvjeffery.github.io/tiddl-gui/web/index.html)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/19JVJeffery/tiddl-gui?style=for-the-badge&color=yellow)](https://github.com/19JVJeffery/tiddl-gui/stargazers)
+
+No installation needed — open the link and go.
+
+<table>
+  <tr>
+    <td align="center"><b>Account / Login</b></td>
+    <td align="center"><b>Download</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/account-tab.png" alt="Account tab — login with Tidal" width="540" /></td>
+    <td><img src="docs/screenshots/download-tab.png" alt="Download tab" width="540" /></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Search</b></td>
+    <td align="center"><b>Library</b></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/search-tab.png" alt="Search tab" width="540" /></td>
+    <td><img src="docs/screenshots/library-tab.png" alt="Library tab" width="540" /></td>
+  </tr>
+</table>
+
+</div>
 
 > [!WARNING]
 > This app is for personal use only and is not affiliated with Tidal. Users must ensure their use complies with Tidal's terms of service and local copyright laws. Downloaded tracks are for personal use and may not be shared or redistributed. The developer assumes no responsibility for misuse of this app.
-
-**Live app: <https://19jvjeffery.github.io/tiddl-gui/web/index.html>**
-
-No installation needed — open the link and go.
 
 ## How to use
 

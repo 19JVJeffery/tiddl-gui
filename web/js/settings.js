@@ -11,6 +11,7 @@ import {
   getClientSecret, setClientSecret,
   getTheme, setTheme,
   getAccentColor, setAccentColor,
+  getUiEffects, setUiEffects,
   getTrackQuality, setTrackQuality,
   getVideoQuality, setVideoQuality,
   getThreadsCount, setThreadsCount,
@@ -32,6 +33,19 @@ import {
   getTemplate, setTemplate,
   TEMPLATE_DEFAULTS,
 } from "./config.js";
+
+// ─── UI Effects ───────────────────────────────────────────────────────────────
+
+/** Apply a UI effects level ("full" | "reduced" | "minimal") to <html>. */
+export function applyUiEffects(level) {
+  const root = document.documentElement;
+  const validLevels = ["full", "reduced", "minimal"];
+  const safeLevel = validLevels.includes(level) ? level : "full";
+  root.setAttribute("data-effects", safeLevel);
+  document.querySelectorAll(".seg-btn[data-effects-val]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.effectsVal === safeLevel);
+  });
+}
 
 // ─── Browser chrome: dynamic favicon + Safari/Chrome tab colour ──────────────
 
@@ -83,6 +97,7 @@ function _updateBrowserChrome() {
 
 /** Call once at startup to install the OS-theme change listener. */
 export function initBrowserChrome() {
+  applyUiEffects(getUiEffects());
   _updateBrowserChrome();
   window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", () => {
     if (!document.documentElement.getAttribute("data-theme")) _updateBrowserChrome();
@@ -423,6 +438,12 @@ export function loadSettingsForm() {
     btn.classList.toggle("active", btn.dataset.themeVal === theme);
   });
 
+  // UI Effects
+  const effects = getUiEffects();
+  document.querySelectorAll(".seg-btn[data-effects-val]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.effectsVal === effects);
+  });
+
   // Accent colour
   const accent = getAccentColor();
   document.querySelectorAll(".swatch[data-color]").forEach((sw) => {
@@ -486,6 +507,18 @@ export function saveSettingsForm(appendLog) {
   });
 
   if (typeof appendLog === "function") appendLog("Settings saved.", "success");
+}
+
+// ─── UI Effects UI ────────────────────────────────────────────────────────────
+
+export function initUiEffectsUI() {
+  document.querySelectorAll(".seg-btn[data-effects-val]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const val = btn.dataset.effectsVal;
+      setUiEffects(val);
+      applyUiEffects(val);
+    });
+  });
 }
 
 // ─── Accent colour UI ─────────────────────────────────────────────────────────

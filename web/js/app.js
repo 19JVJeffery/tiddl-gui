@@ -32,7 +32,7 @@ import {
   applyTheme, applyAccentColor, cycleTheme,
   initThemeUI, initAccentColorUI,
   initTemplateBuilders, loadSettingsForm, saveSettingsForm,
-  initBrowserChrome,
+  initBrowserChrome, initUiEffectsUI,
 } from "./settings.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1920,6 +1920,7 @@ export function init() {
 
   initThemeUI();
   initAccentColorUI(appendLog);
+  initUiEffectsUI();
   initTemplateBuilders();
 
   // Initial state

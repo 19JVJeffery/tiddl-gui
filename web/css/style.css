@@ -35,6 +35,12 @@
   --header-h:    58px;
   --sidebar-w:   196px;
   --mob-nav-h:   64px;
+  /* Glassmorphism */
+  --blur:             14px;
+  --glass-header:     rgba(11, 11, 20, 0.82);
+  --glass-sidebar:    rgba(17, 17, 32, 0.88);
+  --glass-panel-hdr:  rgba(11, 11, 20, 0.80);
+  --glass-save-strip: rgba(17, 17, 32, 0.92);
 }
 
 /* ─── Light Theme ────────────────────────────────────────────────────────── */
@@ -56,6 +62,10 @@
   --shadow:    0 3px 8px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
   --shadow-lg: 0 10px 24px rgba(0,0,0,.08), 0 4px 8px rgba(0,0,0,.05);
   --shadow-xl: 0 20px 48px rgba(0,0,0,.10);
+  --glass-header:     rgba(242, 242, 250, 0.82);
+  --glass-sidebar:    rgba(255, 255, 255, 0.88);
+  --glass-panel-hdr:  rgba(242, 242, 250, 0.80);
+  --glass-save-strip: rgba(255, 255, 255, 0.92);
 }
 
 /* ─── System Light ───────────────────────────────────────────────────────── */
@@ -78,6 +88,10 @@
     --shadow:    0 3px 8px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.06);
     --shadow-lg: 0 10px 24px rgba(0,0,0,.08), 0 4px 8px rgba(0,0,0,.05);
     --shadow-xl: 0 20px 48px rgba(0,0,0,.10);
+    --glass-header:     rgba(242, 242, 250, 0.82);
+    --glass-sidebar:    rgba(255, 255, 255, 0.88);
+    --glass-panel-hdr:  rgba(242, 242, 250, 0.80);
+    --glass-save-strip: rgba(255, 255, 255, 0.92);
   }
 }
 
@@ -94,6 +108,43 @@
   0%   { background-position: 0% 50%; }
   50%  { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+/* ─── UI Effects levels ──────────────────────────────────────────────────── */
+/* Reduced: shorter durations, smaller blur */
+[data-effects="reduced"] {
+  --t-fast:   60ms ease;
+  --t-normal: 110ms ease;
+  --t-slow:   190ms ease;
+  --blur:     6px;
+}
+/* Minimal: near-zero durations, no blur */
+[data-effects="minimal"] {
+  --t-fast:   1ms;
+  --t-normal: 1ms;
+  --t-slow:   1ms;
+  --blur:     0px;
+}
+[data-effects="minimal"] *,
+[data-effects="minimal"] *::before,
+[data-effects="minimal"] *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}
+/* Keep spinner functional even in minimal mode */
+[data-effects="minimal"] .spinner {
+  animation-duration: 0.65s !important;
+  animation-iteration-count: infinite !important;
+}
+
+/* ─── Prefers reduced motion ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .spinner { animation-duration: 0.65s !important; animation-iteration-count: infinite !important; }
 }
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */
@@ -223,15 +274,15 @@ select {
 
 /* ─── Header ─────────────────────────────────────────────────────────────── */
 header {
-  background: var(--color-surface);
+  background: var(--glass-header);
   border-bottom: 1px solid var(--color-border);
   padding: 0 var(--sp-6);
   height: var(--header-h);
   display: flex; align-items: center; gap: var(--sp-3);
   position: sticky; top: 0; z-index: 200;
   transition: background var(--t-slow), border-color var(--t-slow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
 }
 
 .logo {
@@ -271,10 +322,12 @@ header {
 /* ─── Sidebar ────────────────────────────────────────────────────────────── */
 nav.sidebar {
   width: var(--sidebar-w); flex-shrink: 0;
-  background: var(--color-surface); border-right: 1px solid var(--color-border);
+  background: var(--glass-sidebar); border-right: 1px solid var(--color-border);
   padding: var(--sp-4) var(--sp-2);
   display: flex; flex-direction: column; gap: var(--sp-1); overflow-y: auto;
   transition: background var(--t-slow);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
 }
 
 .tab-btn {
@@ -310,9 +363,12 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
   flex-shrink: 0;
   overflow: hidden;
   padding: var(--sp-6) var(--sp-8) 0;
-  background: var(--color-bg);
+  background: var(--glass-panel-hdr);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
   transition: background var(--t-slow);
   z-index: 10;
+  border-bottom: 1px solid var(--color-border-soft);
 }
 .panel-scroll-body {
   flex: 1;

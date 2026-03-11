@@ -154,6 +154,54 @@ function clearLog() {
   if (log) log.innerHTML = "";
 }
 
+// ─── Download status panel tabs ───────────────────────────────────────────────
+
+function switchDlTab(tab) {
+  const progressView = $("dl-progress-view");
+  const logView      = $("dl-log-view");
+  const progressBtn  = $("dl-tab-progress-btn");
+  const logBtn       = $("dl-tab-log-btn");
+  const clearLogBtn  = $("btn-clear-log");
+  if (tab === "log") {
+    progressView?.classList.add("hidden");
+    logView?.classList.remove("hidden");
+    progressBtn?.classList.remove("active");
+    logBtn?.classList.add("active");
+    clearLogBtn?.classList.remove("hidden");
+    logBtn?.setAttribute("aria-selected", "true");
+    progressBtn?.setAttribute("aria-selected", "false");
+  } else {
+    logView?.classList.add("hidden");
+    progressView?.classList.remove("hidden");
+    logBtn?.classList.remove("active");
+    progressBtn?.classList.add("active");
+    clearLogBtn?.classList.add("hidden");
+    progressBtn?.setAttribute("aria-selected", "true");
+    logBtn?.setAttribute("aria-selected", "false");
+  }
+}
+
+// ─── Per-item progress list ───────────────────────────────────────────────────
+
+function buildProgressList(items) {
+  const list = $("dl-item-progress-list");
+  if (!list) return;
+  list.innerHTML = items.map((item, idx) => {
+    const thumbHtml = item.cover
+      ? `<img src="${escHtml(item.cover)}" alt="" class="dl-item-thumb${item.coverRound ? " round" : ""}" loading="lazy" />`
+      : `<div class="dl-item-thumb${item.coverRound ? " round" : ""}"></div>`;
+    return `<div class="dl-item-row dl-item-row--pending" id="dl-item-row-${idx}">
+      ${thumbHtml}
+      <div class="dl-item-details">
+        <div class="dl-item-title">${escHtml(item.title)}</div>
+        <div class="dl-item-msg" id="dl-item-msg-${idx}">Waiting\u2026</div>
+        <div class="dl-item-bar-track"><div class="dl-item-bar-fill" id="dl-item-bar-${idx}" style="width:0%"></div></div>
+      </div>
+      <span class="dl-item-icon" id="dl-item-icon-${idx}"></span>
+    </div>`;
+  }).join("");
+}
+
 // ─── Nav ─────────────────────────────────────────────────────────────────────
 
 let _detailOriginTab = "search";
@@ -505,23 +553,37 @@ async function handleDownload() {
   const downloadBtn   = $("btn-download");
   downloadBtn.disabled = true;
   clearLog();
+  switchDlTab("progress");
+  buildProgressList(items);
   setProgress(0, items.length, "Starting\u2026");
 
   let totalDone = 0, totalOk = 0, totalFail = 0;
 
   for (let qi = 0; qi < items.length; qi++) {
-    const item     = items[qi];
-    const quality  = advanced ? (item.quality || globalQuality) : globalQuality;
-    const qStatusEl  = $(`queue-status-${qi}`);
-    const queueItemEl = $("download-queue")?.querySelector(`.queue-item[data-idx="${qi}"]`);
+    const item         = items[qi];
+    const quality      = advanced ? (item.quality || globalQuality) : globalQuality;
+    const qStatusEl    = $(`queue-status-${qi}`);
+    const queueItemEl  = $("download-queue")?.querySelector(`.queue-item[data-idx="${qi}"]`);
+    const itemRowEl    = $(`dl-item-row-${qi}`);
+    const itemMsgEl    = $(`dl-item-msg-${qi}`);
+    const itemBarEl    = $(`dl-item-bar-${qi}`);
+    const itemIconEl   = $(`dl-item-icon-${qi}`);
+
     if (queueItemEl) queueItemEl.classList.add("q-downloading");
+    if (itemRowEl) {
+      itemRowEl.classList.remove("dl-item-row--pending");
+      itemRowEl.classList.add("dl-item-row--active");
+    }
 
     appendLog(`Downloading ${item.type}/${item.id} @ ${QUALITY_LABELS[quality] || quality}`, "info");
-    if (qStatusEl) qStatusEl.textContent = "\u23f3";
+    if (qStatusEl)  qStatusEl.textContent  = "\u23f3";
+    if (itemIconEl) itemIconEl.textContent = "\u23f3";
 
     const onProgress = (done, total, msg) => {
       setProgress(qi, items.length, msg || `Item ${qi + 1}/${items.length}`);
       if (msg) appendLog(msg, "info");
+      if (itemBarEl && total > 0) itemBarEl.style.width = `${Math.round((done / total) * 100)}%`;
+      if (itemMsgEl && msg) itemMsgEl.textContent = msg;
     };
 
     try {
@@ -541,14 +603,36 @@ async function handleDownload() {
         else           { appendLog(`\u2717 Failed: ${r.filename} \u2014 ${r.error}`, "error"); totalFail++; }
       }
       const allOk = results.every((r) => r.success);
-      if (qStatusEl) qStatusEl.textContent = allOk ? "\u2713" : "\u2717";
+      if (qStatusEl)  qStatusEl.textContent  = allOk ? "\u2713" : "\u2717";
+      if (itemIconEl) itemIconEl.textContent = allOk ? "\u2713" : "\u2717";
+      if (itemBarEl)  itemBarEl.style.width  = "100%";
+      if (itemMsgEl)  itemMsgEl.textContent  = allOk ? "Done" : `Failed \u2014 ${results.filter(r => !r.success).map(r => r.error).join(", ")}`;
+      if (itemRowEl) {
+        itemRowEl.classList.remove("dl-item-row--active");
+        itemRowEl.classList.add(allOk ? "dl-item-row--done" : "dl-item-row--failed");
+      }
       if (queueItemEl) {
         queueItemEl.classList.remove("q-downloading");
         queueItemEl.classList.add(allOk ? "q-done" : "q-failed");
       }
+      // Auto-remove successful items from queue after a brief delay.
+      // Uses indexOf to find the item by reference; if it was already
+      // removed by the user in the meantime indexOf returns -1 and we
+      // skip the removal safely.
+      if (allOk) {
+        const itemRef = item;
+        setTimeout(() => {
+          const idx = downloadQueue.indexOf(itemRef);
+          if (idx !== -1) removeFromQueue(idx);
+        }, 1500);
+      }
     } catch (err) {
       appendLog(`Error (${item.type}/${item.id}): ${err.message}`, "error");
-      if (qStatusEl) qStatusEl.textContent = "\u2717";
+      if (qStatusEl)  qStatusEl.textContent  = "\u2717";
+      if (itemIconEl) itemIconEl.textContent = "\u2717";
+      if (itemBarEl)  itemBarEl.style.width  = "100%";
+      if (itemMsgEl)  itemMsgEl.textContent  = `Error: ${err.message}`;
+      if (itemRowEl) { itemRowEl.classList.remove("dl-item-row--active"); itemRowEl.classList.add("dl-item-row--failed"); }
       if (queueItemEl) { queueItemEl.classList.remove("q-downloading"); queueItemEl.classList.add("q-failed"); }
       totalFail++;
     }
@@ -1503,14 +1587,10 @@ export function init() {
   $("btn-login")?.addEventListener("click", startLogin);
   $("btn-logout")?.addEventListener("click", handleLogout);
 
-  // Log toggle
-  $("btn-toggle-log")?.addEventListener("click", () => {
-    const log = $("download-log");
-    const btn = $("btn-toggle-log");
-    if (!log || !btn) return;
-    const collapsed = log.classList.toggle("log-collapsed");
-    btn.textContent = collapsed ? "Show log" : "Hide log";
-  });
+  // Download status panel tab switching
+  $("dl-tab-progress-btn")?.addEventListener("click", () => switchDlTab("progress"));
+  $("dl-tab-log-btn")?.addEventListener("click", () => switchDlTab("log"));
+  $("btn-clear-log")?.addEventListener("click", clearLog);
 
   // Download
   $("btn-download")?.addEventListener("click", handleDownload);

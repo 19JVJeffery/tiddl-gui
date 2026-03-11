@@ -48,6 +48,11 @@ function qualityPill(quality) {
   return `<span class="quality-pill-sm" data-quality="${escHtml(quality)}">${escHtml(QUALITY_LABELS[quality])}</span>`;
 }
 
+/** Returns the display title for a track, appending the version in parentheses when present. */
+function formatTrackTitle(track) {
+  return track.version ? `${track.title} (${track.version})` : track.title;
+}
+
 /**
  * File extensions that are binary formats where reading as UTF-8 text is
  * unreliable and Tidal URL extraction will likely fail.
@@ -1034,11 +1039,11 @@ function buildResultGrid(items, type, shownCount, totalCount) {
   for (const item of items.slice(0, shownCount)) {
     let id, title, sub, cover, round = false, quality = null;
     if (type === "tracks") {
-      id = item.id; title = item.version ? `${item.title} (${item.version})` : item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.album?.cover); quality = item.audioQuality || null;
+      id = item.id; title = formatTrackTitle(item); sub = item.artist?.name || "";
+      cover = coverUrl(item.album?.cover); quality = item.audioQuality;
     } else if (type === "albums") {
       id = item.id; title = item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.cover); quality = item.audioQuality || null;
+      cover = coverUrl(item.cover); quality = item.audioQuality;
     } else if (type === "artists") {
       id = item.id; title = item.name; sub = "Artist";
       cover = coverUrl(item.picture); round = true;
@@ -1079,11 +1084,11 @@ function buildResultRowSection(items, type, heading, viewAllKey) {
   for (const item of items) {
     let id, title, sub, cover, round = false, quality = null;
     if (type === "tracks") {
-      id = item.id; title = item.version ? `${item.title} (${item.version})` : item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.album?.cover); quality = item.audioQuality || null;
+      id = item.id; title = formatTrackTitle(item); sub = item.artist?.name || "";
+      cover = coverUrl(item.album?.cover); quality = item.audioQuality;
     } else if (type === "albums") {
       id = item.id; title = item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.cover); quality = item.audioQuality || null;
+      cover = coverUrl(item.cover); quality = item.audioQuality;
     } else if (type === "artists") {
       id = item.id; title = item.name; sub = "Artist";
       cover = coverUrl(item.picture); round = true;
@@ -1364,7 +1369,7 @@ async function renderArtistDetail(artistId, artistName, body) {
   function makeAlbumCards(items) {
     return items.map((album) => {
       const c = coverUrl(album.cover);
-      return buildResultCard("album", album.id, album.title, album.releaseDate?.slice(0,4) || "", c, false, album.audioQuality || null);
+      return buildResultCard("album", album.id, album.title, album.releaseDate?.slice(0,4) || "", c, false, album.audioQuality);
     }).join("");
   }
 
@@ -1429,7 +1434,7 @@ async function renderAlbumDetail(albumId, body) {
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
     const coverArt = coverUrl(albumMeta.cover);
-    const displayTitle = t.version ? `${t.title} (${t.version})` : t.title;
+    const displayTitle = formatTrackTitle(t);
     return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
         data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
         data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
@@ -1478,7 +1483,7 @@ async function renderPlaylistDetail(playlistId, body) {
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
     const coverArt = coverUrl(t.album?.cover);
-    const displayTitle = t.version ? `${t.title} (${t.version})` : t.title;
+    const displayTitle = formatTrackTitle(t);
     return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
         data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
         data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
@@ -1635,7 +1640,7 @@ function renderLibraryContent(items) {
       const dateLabel = _librarySort === "dateAdded" && t._dateAdded
         ? (t._dateAdded.length >= 10 ? t._dateAdded.slice(0, 10) : t._dateAdded)
         : "";
-      const displayTitle = t.version ? `${t.title} (${t.version})` : t.title;
+      const displayTitle = formatTrackTitle(t);
       return `<div class="library-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
           data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
           data-cover="${escHtml(coverUrl(t.album?.cover))}" tabindex="0" role="button">
@@ -1680,7 +1685,7 @@ function renderLibraryContent(items) {
       const title = item.title || item.name || "";
       const sub   = type === "album" ? (item.artist?.name || "") : (item.creator?.name || "Tidal");
       const cover = coverUrl(type === "album" ? item.cover : (item.image || item.squareImage));
-      const quality = type === "album" ? (item.audioQuality || null) : null;
+      const quality = type === "album" ? item.audioQuality : null;
       html += buildResultCard(type, id, title, sub, cover, false, quality);
     }
     html += `</div>`;

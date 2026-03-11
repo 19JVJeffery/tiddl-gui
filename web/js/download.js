@@ -519,7 +519,7 @@ function buildZip(files) {
 async function fetchTrackData(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
   const track = await getTrack(trackId);
-  const title = sanitize(track.title || String(trackId));
+  const title = sanitize((track.version ? `${track.title} (${track.version})` : track.title) || String(trackId));
   const artist = sanitize(track.artist?.name || "Unknown Artist");
   const trackNumber = track.trackNumber || 0;
   const coverHash = track.album?.cover || null;

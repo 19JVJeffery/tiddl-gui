@@ -56,6 +56,18 @@ function formatTrackTitle(track) {
   return track.version ? `${track.title} (${track.version})` : track.title;
 }
 
+/** Formats a duration in total seconds to M:SS or H:MM:SS. */
+function formatDuration(totalSeconds) {
+  const s = Math.round(totalSeconds || 0);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
 /**
  * File extensions that are binary formats where reading as UTF-8 text is
  * unreliable and Tidal URL extraction will likely fail.
@@ -1320,6 +1332,7 @@ async function navigateToDetail(type, id, title, sub, cover, fromTab) {
       </div>
       <h2 class="detail-title">${escHtml(title)}</h2>
       <p class="detail-sub" id="detail-sub">${escHtml(sub)}</p>
+      <div class="detail-header-meta" id="detail-header-meta"></div>
       <div class="detail-actions">
         <button class="${inQueue ? "btn-secondary in-queue" : "btn-primary"}" id="btn-detail-dl-queue">
           ${_detailQueueBtnHtml(typeLabel, inQueue)}
@@ -1441,6 +1454,27 @@ async function renderAlbumDetail(albumId, body) {
   const headerQualityEl = $("detail-header-quality");
   if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(albumMeta.audioQuality);
 
+  // Populate the metadata row: track count, duration, year
+  const headerMetaEl = $("detail-header-meta");
+  if (headerMetaEl) {
+    const year = albumMeta.releaseDate ? albumMeta.releaseDate.slice(0, 4) : null;
+    const trackCount = albumMeta.numberOfTracks || tracks.length;
+    const totalDuration = albumMeta.duration
+      ? formatDuration(albumMeta.duration)
+      : tracks.reduce((sum, t) => sum + (t.duration || 0), 0) > 0
+        ? formatDuration(tracks.reduce((sum, t) => sum + (t.duration || 0), 0))
+        : null;
+    const parts = [];
+    if (trackCount) parts.push(`${trackCount} track${trackCount > 1 ? "s" : ""}`);
+    if (totalDuration) parts.push(totalDuration);
+    if (year) parts.push(year);
+    headerMetaEl.innerHTML = parts.length
+      ? `<span class="detail-meta-text">${escHtml(parts.join(" \u00b7 "))}</span>${qualityPill(albumMeta.audioQuality)}`
+      : qualityPill(albumMeta.audioQuality);
+    // Hide the type-row quality span to avoid duplication when meta row is shown
+    if (parts.length && headerQualityEl) headerQualityEl.innerHTML = "";
+  }
+
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
     const coverArt = coverUrl(albumMeta.cover);
@@ -1494,6 +1528,20 @@ async function renderPlaylistDetail(playlistId, body) {
   const maxPlaylistQuality = QUALITY_ORDER.find((q) => tracks.some((t) => t.audioQuality === q)) || null;
   const headerQualityEl = $("detail-header-quality");
   if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(maxPlaylistQuality);
+
+  // Populate the metadata row: track count and max quality
+  const headerMetaEl = $("detail-header-meta");
+  if (headerMetaEl) {
+    const trackCount = tracks.length;
+    const totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+    const parts = [];
+    if (trackCount) parts.push(`${trackCount} track${trackCount > 1 ? "s" : ""}`);
+    if (totalDuration > 0) parts.push(formatDuration(totalDuration));
+    headerMetaEl.innerHTML = parts.length
+      ? `<span class="detail-meta-text">${escHtml(parts.join(" \u00b7 "))}</span>${qualityPill(maxPlaylistQuality)}`
+      : qualityPill(maxPlaylistQuality);
+    if (parts.length && headerQualityEl) headerQualityEl.innerHTML = "";
+  }
 
   body.innerHTML = `<div class="detail-tracklist">${tracks.map((t, i) => {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));

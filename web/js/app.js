@@ -27,7 +27,7 @@ import {
 } from "./download.js";
 import {
   getTheme, getAccentColor, getTrackQuality, setTrackQuality, getAdvancedMode,
-  QUALITY_LABELS, QUALITY_STANDARD,
+  QUALITY_LABELS, QUALITY_DESCRIPTIONS, QUALITY_STANDARD,
   loadSearchHistory, saveToSearchHistory, clearSearchHistory,
 } from "./config.js";
 import {
@@ -471,13 +471,23 @@ function visibleQualityOptions() {
 
 /**
  * Build <option> elements for a quality <select>.
+ * @param {string} selectedValue - The currently selected quality key.
+ * @param {boolean} [detailed=false] - When true, use full descriptions (e.g. "High — 320 kbps · M4A").
  */
-function qualityOptions(selectedValue) {
+function qualityOptions(selectedValue, detailed = false) {
   const options = visibleQualityOptions();
   return options.map((v) => {
-    const label = QUALITY_LABELS[v] || v;
+    const label = detailed
+      ? (QUALITY_DESCRIPTIONS[v] || QUALITY_LABELS[v] || v)
+      : (QUALITY_LABELS[v] || v);
     return `<option value="${v}"${v === selectedValue ? " selected" : ""}>${escHtml(label)}</option>`;
   }).join("");
+}
+
+/** Sets data-quality on a select element to match its current value, enabling CSS pill-style colouring. */
+function updateQualitySelectStyle(select) {
+  if (!select) return;
+  select.dataset.quality = select.value;
 }
 
 /**
@@ -499,13 +509,16 @@ function rebuildQualityPicker() {
   if (!select) return;
 
   const current = select.value || getTrackQuality();
-  select.innerHTML = qualityOptions(current);
+  select.innerHTML = qualityOptions(current, true);
 
   // Ensure selected value is still valid; fall back to saved or HIGH
   const validOptions = visibleQualityOptions();
   if (!validOptions.includes(select.value)) {
     select.value = validOptions.includes(getTrackQuality()) ? getTrackQuality() : "HIGH";
   }
+
+  // Sync pill-style colouring
+  updateQualitySelectStyle(select);
 
   // Update the tooltip title attribute
   select.title = qualityPickerTip();
@@ -520,6 +533,7 @@ function syncQualityPicker() {
   if (!select) return;
   rebuildQualityPicker();
   select.value = getTrackQuality();
+  updateQualitySelectStyle(select);
 }
 
 function initQualityPicker() {
@@ -528,10 +542,12 @@ function initQualityPicker() {
 
   rebuildQualityPicker();
   select.value = getTrackQuality();
+  updateQualitySelectStyle(select);
 
   select.addEventListener("change", () => {
     const q = select.value;
     setTrackQuality(q);
+    updateQualitySelectStyle(select);
     const advanced = getAdvancedMode();
     if (advanced && downloadQueue.length > 0) {
       if (confirm(`Apply "${QUALITY_LABELS[q] || q}" quality to all ${downloadQueue.length} item(s) in queue?`)) {

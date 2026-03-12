@@ -1164,12 +1164,25 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 /* Quality dropdown on download panel */
 .quality-select-dl {
   margin-top: 0.35rem; width: 100%;
-  border-left-width: 3px;
+  font-weight: 700;
+  transition: color var(--t-fast), background-color var(--t-fast), border-color var(--t-fast);
 }
-.quality-select-dl[value="LOW"]             { border-left-color: var(--q-low); }
-.quality-select-dl[value="HIGH"]            { border-left-color: var(--q-high); }
-.quality-select-dl[value="LOSSLESS"]        { border-left-color: var(--q-lossless); }
-.quality-select-dl[value="HI_RES_LOSSLESS"] { border-left-color: var(--q-max); }
+.quality-select-dl[data-quality="LOW"] {
+  color: var(--q-low); background-color: var(--q-low-bg); border-color: var(--q-low);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234caf50' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+.quality-select-dl[data-quality="HIGH"] {
+  color: var(--q-high); background-color: var(--q-high-bg); border-color: var(--q-high);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%231e88e5' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+.quality-select-dl[data-quality="LOSSLESS"] {
+  color: var(--q-lossless); background-color: var(--q-lossless-bg); border-color: var(--q-lossless);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2300acc1' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+.quality-select-dl[data-quality="HI_RES_LOSSLESS"] {
+  color: var(--q-max); background-color: var(--q-max-bg); border-color: var(--q-max);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239c27b0' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
 
 .btn-download-main { height: 38px; flex-shrink: 0; }
 

@@ -27,8 +27,7 @@ import {
 } from "./download.js";
 import {
   getTheme, getAccentColor, getTrackQuality, setTrackQuality, getAdvancedMode,
-  getExperimentalQuality,
-  QUALITY_LABELS, QUALITY_STANDARD, QUALITY_EXPERIMENTAL,
+  QUALITY_LABELS, QUALITY_STANDARD,
   loadSearchHistory, saveToSearchHistory, clearSearchHistory,
 } from "./config.js";
 import {
@@ -40,7 +39,7 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-// QUALITY_LABELS, QUALITY_STANDARD, QUALITY_EXPERIMENTAL are imported from config.js
+// QUALITY_LABELS, QUALITY_STANDARD are imported from config.js
 
 /** Quality tiers ordered from highest to lowest, used to find the best quality in a collection. */
 const QUALITY_ORDER = [...QUALITY_STANDARD];
@@ -465,38 +464,26 @@ async function handleLogout() {
 
 // ─── Quality ─────────────────────────────────────────────────────────────────
 
-/** Returns the quality options visible under the current experimental mode setting. */
+/** Returns the available quality options. */
 function visibleQualityOptions() {
-  const experimental = getExperimentalQuality();
-  return experimental
-    ? [...QUALITY_STANDARD, ...QUALITY_EXPERIMENTAL]
-    : QUALITY_STANDARD;
+  return QUALITY_STANDARD;
 }
 
 /**
  * Build <option> elements for a quality <select>.
- * Experimental options are annotated with "(experimental)" in the label.
  */
 function qualityOptions(selectedValue) {
-  const experimental = getExperimentalQuality();
   const options = visibleQualityOptions();
   return options.map((v) => {
-    let label = QUALITY_LABELS[v] || v;
-    if (experimental && QUALITY_EXPERIMENTAL.includes(v)) label += " (experimental)";
+    const label = QUALITY_LABELS[v] || v;
     return `<option value="${v}"${v === selectedValue ? " selected" : ""}>${escHtml(label)}</option>`;
   }).join("");
 }
 
 /**
- * Tooltip text for the quality picker — changes when experimental mode is on to
- * explain the extra options and note that they may not always work.
+ * Tooltip text for the quality picker.
  */
 function qualityPickerTip() {
-  const experimental = getExperimentalQuality();
-  if (experimental) {
-    return "Experimental quality mode is ON. Standard: Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. "
-      + "Experimental: Dolby Atmos and Sony 360RA are spatial-audio formats — they may not be available for all tracks or subscriptions and are a work in progress.";
-  }
   return "Download quality. In normal mode, applies to all queued items. In Advanced mode (Settings), set quality per item.";
 }
 
@@ -505,8 +492,7 @@ function getSelectedQuality() {
 }
 
 /**
- * Rebuild the <option> list of the main quality <select> to reflect the current
- * experimental quality setting, and update its tooltip.
+ * Rebuild the <option> list of the main quality <select> and update its tooltip.
  */
 function rebuildQualityPicker() {
   const select = $("quality-select");
@@ -2150,15 +2136,6 @@ export function init() {
   // Settings
   $("btn-save-settings")?.addEventListener("click", handleSaveSettings);
 
-  // Experimental quality mode: show/hide note immediately on checkbox toggle
-  const expQualityCb = $("setting-experimental-quality");
-  const expQualityNote = $("experimental-quality-note");
-  function syncExperimentalQualityNote() {
-    if (!expQualityNote) return;
-    expQualityNote.style.display = expQualityCb?.checked ? "" : "none";
-  }
-  expQualityCb?.addEventListener("change", syncExperimentalQualityNote);
-
   // Theme toggle
   $("theme-toggle")?.addEventListener("click", () => { cycleTheme(); updateThemeIcon(); });
 
@@ -2170,8 +2147,6 @@ export function init() {
   // Initial state
   updateAuthBadge();
   loadSettingsForm();
-  // Sync note after loadSettingsForm has set the checkbox value
-  syncExperimentalQualityNote();
 
   if (!isLoggedIn()) {
     activateTab("auth");

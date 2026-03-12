@@ -446,12 +446,7 @@
             <label class="checkbox-label" title="Update the file modification timestamp on already-downloaded files when they are skipped."><input type="checkbox" id="setting-update-mtime" /><span>Update modification time of existing files</span><span class="tip" tabindex="0" data-tip="Touches the last-modified timestamp on skipped files, as if they had just been downloaded now. Useful if other tools sort by date.">?</span></label>
             <label class="checkbox-label" title="Re-embed metadata tags into files that already exist, even if the audio was skipped."><input type="checkbox" id="setting-rewrite-metadata" /><span>Rewrite metadata for already-downloaded files</span><span class="tip" tabindex="0" data-tip="Re-embeds metadata tags (title, artist, cover, etc.) into existing files even if the audio itself was not re-downloaded.">?</span></label>
             <label class="checkbox-label" title="Enables a per-item quality selector in the download queue. The main quality selector becomes an 'override all' control."><input type="checkbox" id="setting-advanced-mode" /><span>Advanced mode &mdash; set quality per-item in the download queue</span><span class="tip" tabindex="0" data-tip="Adds a quality picker to each item in the download queue so you can use a different quality for each track, album, or playlist individually.">?</span></label>
-            <label class="checkbox-label" title="Experimental: unlock additional quality tiers such as Dolby Atmos and Sony 360RA. These formats may not work for all tracks or subscriptions."><input type="checkbox" id="setting-experimental-quality" /><span>Experimental quality mode &mdash; unlock Dolby Atmos &amp; Sony 360RA tiers</span><span class="tip" tabindex="0" data-tip="Adds experimental quality options (Dolby Atmos, Sony 360 Reality Audio) to the quality selectors. These formats are a work in progress — they may not be available for all tracks or subscriptions and downloaded files may not play in all players.">?</span></label>
           </div>
-          <p class="settings-note settings-note-warning" id="experimental-quality-note" style="display:none">
-            <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;vertical-align:-2px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span>Experimental quality mode is active. Dolby Atmos and Sony 360 Reality Audio options will appear in the quality selectors. These formats require a compatible Tidal subscription and are not available for all content. This feature is a work in progress and may not always produce playable files.</span>
-          </p>
         </div>
 
         <!-- File Path Templates -->
@@ -684,9 +679,6 @@
                   <tr><td><span class="quality-pill-sm" data-quality="HIGH">High</span></td><td>.m4a (AAC)</td><td>320 kbps</td></tr>
                   <tr><td><span class="quality-pill-sm" data-quality="LOSSLESS">HiFi</span></td><td>.flac</td><td>16-bit 44.1 kHz lossless</td></tr>
                   <tr><td><span class="quality-pill-sm" data-quality="HI_RES_LOSSLESS">Max</span></td><td>.flac</td><td>Up to 24-bit 192 kHz</td></tr>
-                  <tr><td colspan="3" style="padding-top:0.5rem;font-style:italic;color:var(--color-text-muted);font-size:0.82rem">Experimental tiers (enable in Settings &rarr; Download)</td></tr>
-                  <tr><td><span class="quality-pill-sm" data-quality="DOLBY_ATMOS">Dolby Atmos</span></td><td>MP4 / AC-4</td><td>Spatial audio — HiFi Plus subscription required</td></tr>
-                  <tr><td><span class="quality-pill-sm" data-quality="SONY_360RA">Sony 360RA</span></td><td>MP4 / MQA</td><td>360 Reality Audio — HiFi Plus subscription required</td></tr>
                 </tbody>
               </table>
             </div>
@@ -701,7 +693,6 @@
             <p><strong>Parallel Downloads</strong> &mdash; How many tracks are fetched simultaneously (default: 4). Very high values may hit Tidal API rate limits.</p>
             <p><strong>Skip already-downloaded files</strong> &mdash; Avoids re-downloading files that already exist, matched by filename.</p>
             <p><strong>Advanced mode</strong> &mdash; Adds a per-item quality selector in the download queue. The main quality selector becomes an "override all" control with a confirmation prompt.</p>
-            <p><strong>Experimental quality mode</strong> &mdash; Unlocks Dolby Atmos and Sony 360 Reality Audio quality options in all quality selectors. These formats require a HiFi Plus subscription and are not available for all tracks. This feature is a work in progress — downloaded files may not play in all media players.</p>
             <p><strong>File Path Templates</strong> &mdash; Customise the folder and file names of downloaded files using token chips (e.g. <code>{album.artist}</code>, <code>{item.title}</code>). Use <code>/</code> for subdirectories.</p>
             <p><strong>Metadata</strong> &mdash; Controls what tags are embedded in downloaded files (lyrics, cover art, album review).</p>
             <p><strong>Cover Art</strong> &mdash; Optionally save the cover image as a separate file alongside downloads.</p>

@@ -524,17 +524,8 @@ async function fetchTrackData(trackId, quality, onProgress) {
   const trackNumber = track.trackNumber || 0;
   const coverHash = track.album?.cover || null;
 
-  // Auto-detect Dolby Atmos / Sony 360RA from track metadata so that spatial-
-  // audio content is downloaded correctly regardless of the quality setting.
-  const tags = track.mediaMetadata?.tags || [];
-  let resolvedQuality = quality;
-  if (quality !== "DOLBY_ATMOS" && quality !== "SONY_360RA") {
-    if (tags.includes("DOLBY_ATMOS"))   resolvedQuality = "DOLBY_ATMOS";
-    else if (tags.includes("SONY_360RA")) resolvedQuality = "SONY_360RA";
-  }
-
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
-  const streamInfo = await getTrackStream(trackId, resolvedQuality);
+  const streamInfo = await getTrackStream(trackId, quality);
   const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
 
   if (encryptionType && encryptionType !== "NONE") {

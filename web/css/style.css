@@ -1095,9 +1095,6 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
   --q-high:       #1e88e5;  --q-high-bg:   rgba(30,136,229,.15);
   --q-lossless:   #00acc1;  --q-lossless-bg: rgba(0,172,193,.15);
   --q-max:        #9c27b0;  --q-max-bg:    rgba(156,39,176,.15);
-  /* Experimental quality tiers */
-  --q-atmos:      #e67e22;  --q-atmos-bg:  rgba(230,126,34,.15);
-  --q-360:        #c0392b;  --q-360-bg:    rgba(192,57,43,.15);
 }
 
 /* ─── Quality pill (small, used everywhere) ──────────────────────────────── */
@@ -1113,8 +1110,6 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .quality-pill-sm[data-quality="HIGH"]            { color: var(--q-high);     background: var(--q-high-bg); }
 .quality-pill-sm[data-quality="LOSSLESS"]        { color: var(--q-lossless); background: var(--q-lossless-bg); }
 .quality-pill-sm[data-quality="HI_RES_LOSSLESS"] { color: var(--q-max);      background: var(--q-max-bg); }
-.quality-pill-sm[data-quality="DOLBY_ATMOS"]     { color: var(--q-atmos);    background: var(--q-atmos-bg); }
-.quality-pill-sm[data-quality="SONY_360RA"]      { color: var(--q-360);      background: var(--q-360-bg); }
 
 /* ─── Quality picker (download panel) ───────────────────────────────────── */
 .dl-url-section { margin-bottom: var(--sp-4); }
@@ -1175,8 +1170,6 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .quality-select-dl[value="HIGH"]            { border-left-color: var(--q-high); }
 .quality-select-dl[value="LOSSLESS"]        { border-left-color: var(--q-lossless); }
 .quality-select-dl[value="HI_RES_LOSSLESS"] { border-left-color: var(--q-max); }
-.quality-select-dl[value="DOLBY_ATMOS"]     { border-left-color: var(--q-atmos); }
-.quality-select-dl[value="SONY_360RA"]      { border-left-color: var(--q-360); }
 
 .btn-download-main { height: 38px; flex-shrink: 0; }
 
@@ -1197,8 +1190,6 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
 .queue-item-quality-sel[data-quality="HIGH"]            { border-left-color: var(--q-high); }
 .queue-item-quality-sel[data-quality="LOSSLESS"]        { border-left-color: var(--q-lossless); }
 .queue-item-quality-sel[data-quality="HI_RES_LOSSLESS"] { border-left-color: var(--q-max); }
-.queue-item-quality-sel[data-quality="DOLBY_ATMOS"]     { border-left-color: var(--q-atmos); }
-.queue-item-quality-sel[data-quality="SONY_360RA"]      { border-left-color: var(--q-360); }
 
 /* ─── Auth page redesign ─────────────────────────────────────────────────── */
 .auth-page {

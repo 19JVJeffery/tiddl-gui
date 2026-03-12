@@ -30,8 +30,7 @@ import {
   getM3uSave, setM3uSave,
   getM3uAllowed, setM3uAllowed,
   getAdvancedMode, setAdvancedMode,
-  getExperimentalQuality, setExperimentalQuality,
-  QUALITY_LABELS, QUALITY_STANDARD, QUALITY_EXPERIMENTAL,
+  QUALITY_LABELS, QUALITY_STANDARD,
   getTemplate, setTemplate,
   TEMPLATE_DEFAULTS,
 } from "./config.js";
@@ -399,28 +398,20 @@ function setVal(id, v)  { const e = el(id); if (e) e.value   = v; }
 function setChk(id, v)  { const e = el(id); if (e) e.checked = v; }
 
 /**
- * Rebuild the options of the Default Track Quality <select> in the settings
- * panel to match whether experimental quality mode is currently enabled.
- * Standard tiers always appear; experimental tiers are added when the mode is on.
+ * Rebuild the options of the Default Track Quality <select> in the settings panel.
  */
 function rebuildSettingsTrackQualityDropdown() {
   const select = el("setting-track-quality");
   if (!select) return;
-  const experimental = getExperimentalQuality();
-  const tiers = experimental ? [...QUALITY_STANDARD, ...QUALITY_EXPERIMENTAL] : QUALITY_STANDARD;
   const current = select.value || getTrackQuality();
-  select.innerHTML = tiers.map((v) => {
-    let label = QUALITY_LABELS[v] || v;
-    if (experimental && QUALITY_EXPERIMENTAL.includes(v)) label += " (experimental)";
+  select.innerHTML = QUALITY_STANDARD.map((v) => {
+    const label = QUALITY_LABELS[v] || v;
     return `<option value="${v}"${v === current ? " selected" : ""}>${label}</option>`;
   }).join("");
-  // Update tooltip to explain experimental tiers when active
+  // Update tooltip
   const tip = select.closest(".field-group")?.querySelector("[data-tip]");
   if (tip) {
-    tip.dataset.tip = experimental
-      ? "Audio quality for downloaded tracks. Standard: Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. "
-        + "Experimental: Dolby Atmos and Sony 360RA are spatial-audio formats — may not work for all tracks or subscriptions and are a work in progress. Higher standard tiers require a HiFi or HiFi Plus Tidal subscription."
-      : "Audio quality for downloaded tracks. Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi or HiFi Plus Tidal subscription.";
+    tip.dataset.tip = "Audio quality for downloaded tracks. Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi or HiFi Plus Tidal subscription.";
   }
 }
 
@@ -441,7 +432,6 @@ export function loadSettingsForm() {
   setChk("setting-update-mtime",     getUpdateMtime());
   setChk("setting-rewrite-metadata", getRewriteMetadata());
   setChk("setting-advanced-mode",    getAdvancedMode());
-  setChk("setting-experimental-quality", getExperimentalQuality());
 
   setChk("setting-meta-enable",       getMetadataEnable());
   setChk("setting-meta-lyrics",       getMetadataLyrics());
@@ -518,7 +508,6 @@ export function saveSettingsForm(appendLog) {
   setUpdateMtime(getChk("setting-update-mtime"));
   setRewriteMetadata(getChk("setting-rewrite-metadata"));
   setAdvancedMode(getChk("setting-advanced-mode"));
-  setExperimentalQuality(getChk("setting-experimental-quality"));
 
   setMetadataEnable(getChk("setting-meta-enable"));
   setMetadataLyrics(getChk("setting-meta-lyrics"));

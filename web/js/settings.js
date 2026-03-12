@@ -418,9 +418,9 @@ function rebuildSettingsTrackQualityDropdown() {
   const tip = select.closest(".field-group")?.querySelector("[data-tip]");
   if (tip) {
     tip.dataset.tip = experimental
-      ? "Default audio quality for downloads. Standard: Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. "
-        + "Experimental: Dolby Atmos and Sony 360RA are spatial-audio formats — may not work for all tracks or subscriptions. Higher tiers require a HiFi or Max Tidal subscription."
-      : "Audio quality for downloaded tracks. Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi or Max Tidal subscription.";
+      ? "Audio quality for downloaded tracks. Standard: Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. "
+        + "Experimental: Dolby Atmos and Sony 360RA are spatial-audio formats — may not work for all tracks or subscriptions and are a work in progress. Higher standard tiers require a HiFi or HiFi Plus Tidal subscription."
+      : "Audio quality for downloaded tracks. Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi or HiFi Plus Tidal subscription.";
   }
 }
 

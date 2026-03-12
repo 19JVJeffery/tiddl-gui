@@ -1047,6 +1047,7 @@ function buildResultCard(resourceType, id, title, sub, cover, round, quality = n
        data-type="${escHtml(resourceType)}" data-id="${escHtml(String(id))}"
        data-title="${escHtml(title)}" data-sub="${escHtml(sub)}"
        data-cover="${escHtml(cover)}" data-round="${round}"
+       data-quality="${escHtml(quality || '')}"
        tabindex="0" role="button" aria-pressed="${inQueue}">
     <div class="result-card-img-wrap">${imgHtml}${overlayHtml}</div>
     <div class="result-info">
@@ -1177,12 +1178,14 @@ function attachResultHandlers(container) {
       card.addEventListener("click", (e) => {
         if (e.target.closest(".card-queue-btn")) return;
         navigateToDetail(card.dataset.type, card.dataset.id,
-          card.dataset.title, card.dataset.sub, card.dataset.cover, "search");
+          card.dataset.title, card.dataset.sub, card.dataset.cover, "search",
+          card.dataset.quality || null);
       });
       card.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           navigateToDetail(card.dataset.type, card.dataset.id,
-            card.dataset.title, card.dataset.sub, card.dataset.cover, "search");
+            card.dataset.title, card.dataset.sub, card.dataset.cover, "search",
+            card.dataset.quality || null);
         }
       });
       // Quick-add button
@@ -1321,7 +1324,7 @@ function _detailQueueBtnHtml(typeLabel, isInQueue) {
           Add ${escHtml(typeLabel)} to Queue`;
 }
 
-async function navigateToDetail(type, id, title, sub, cover, fromTab) {
+async function navigateToDetail(type, id, title, sub, cover, fromTab, hintQuality = null) {
   openDetailPanel(fromTab);
 
   const header = $("detail-header");
@@ -1381,7 +1384,7 @@ async function navigateToDetail(type, id, title, sub, cover, fromTab) {
     if (type === "artist") {
       await renderArtistDetail(id, title, body);
     } else if (type === "album") {
-      await renderAlbumDetail(id, body);
+      await renderAlbumDetail(id, body, hintQuality);
     } else if (type === "playlist") {
       await renderPlaylistDetail(id, body);
     }
@@ -1439,12 +1442,23 @@ async function renderArtistDetail(artistId, artistName, body) {
   attachResultHandlers(body);
 }
 
-async function renderAlbumDetail(albumId, body) {
+async function renderAlbumDetail(albumId, body, hintQuality = null) {
   const [albumMeta, allItems] = await Promise.all([
     getAlbum(albumId),
     getAllAlbumItems(albumId),
   ]);
   const tracks = (allItems || []).filter((i) => i.type === "track").map((i) => i.item);
+
+  // Determine the best available quality from all sources: album metadata,
+  // individual track qualities, and the hint carried from the search result or
+  // library card that opened this view (search/library endpoints sometimes
+  // return more accurate quality data than the album endpoint itself).
+  const albumMetaQuality = effectiveQuality(albumMeta);
+  const trackQualities = new Set(tracks.map((t) => effectiveQuality(t)).filter(Boolean));
+  const bestTrackQuality = QUALITY_ORDER.find((q) => trackQualities.has(q)) || null;
+  const albumQuality = QUALITY_ORDER.find((q) =>
+    q === albumMetaQuality || q === bestTrackQuality || q === hintQuality
+  ) || null;
 
   // Make the artist name in the header a link to the artist's detail page
   const artistId   = albumMeta.artist?.id;
@@ -1463,9 +1477,9 @@ async function renderAlbumDetail(albumId, body) {
     subEl.appendChild(btn);
   }
 
-  // Update the detail header quality pill with the album's max quality
+  // Update the detail header quality pill with the album's best quality
   const headerQualityEl = $("detail-header-quality");
-  if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(effectiveQuality(albumMeta));
+  if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(albumQuality);
 
   // Populate the metadata row: track count, duration, year
   const headerMetaEl = $("detail-header-meta");
@@ -1482,8 +1496,8 @@ async function renderAlbumDetail(albumId, body) {
     if (totalDuration) parts.push(totalDuration);
     if (year) parts.push(year);
     headerMetaEl.innerHTML = parts.length
-      ? `<span class="detail-meta-text">${escHtml(parts.join(" \u00b7 "))}</span>${qualityPill(effectiveQuality(albumMeta))}`
-      : qualityPill(effectiveQuality(albumMeta));
+      ? `<span class="detail-meta-text">${escHtml(parts.join(" \u00b7 "))}</span>${qualityPill(albumQuality)}`
+      : qualityPill(albumQuality);
     // Hide the type-row quality span to avoid duplication when meta row is shown
     if (parts.length && headerQualityEl) headerQualityEl.innerHTML = "";
   }
@@ -1492,6 +1506,11 @@ async function renderAlbumDetail(albumId, body) {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
     const coverArt = coverUrl(albumMeta.cover);
     const displayTitle = formatTrackTitle(t);
+    // Use the highest of the track's own reported quality and the album quality,
+    // since all tracks in a Hi-Res album should be Hi-Res even when the items
+    // endpoint reports a lower tier.
+    const tq = effectiveQuality(t);
+    const trackQuality = QUALITY_ORDER.find((q) => q === tq || q === albumQuality) || null;
     return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
         data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
         data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
@@ -1500,7 +1519,7 @@ async function renderAlbumDetail(albumId, body) {
         <span class="detail-track-title">${escHtml(displayTitle)}</span>
         <span class="detail-track-artist">${escHtml(t.artist?.name || "")}</span>
       </div>
-      ${qualityPill(effectiveQuality(t))}
+      ${qualityPill(trackQuality)}
       <button class="detail-track-add" title="Add to queue">
         ${inQ ? "\u2713 Added" : "+ Add"}
       </button>
@@ -1779,7 +1798,8 @@ function attachLibraryCardHandlers(container) {
       card.addEventListener("click", (e) => {
         if (e.target.closest(".card-queue-btn")) return;
         navigateToDetail(card.dataset.type, card.dataset.id,
-          card.dataset.title, card.dataset.sub, card.dataset.cover, "library");
+          card.dataset.title, card.dataset.sub, card.dataset.cover, "library",
+          card.dataset.quality || null);
       });
       const qaBtn = card.querySelector(".card-queue-btn");
       if (qaBtn) qaBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleResultInQueue(card); });

@@ -298,9 +298,65 @@ function _findBox(data, type, start, end) {
 }
 
 /**
+ * Walk the MP4 box region data[start..end), recursing into known container
+ * boxes, and add `delta` to every stco/co64 entry whose value is strictly
+ * greater than `threshold`.
+ *
+ * This must be called after inserting bytes inside moov so that the absolute
+ * chunk-offset tables (stco/co64) remain valid when mdat lies after the edit
+ * point.  When mdat precedes moov the entries will all be below the threshold
+ * and are left untouched.
+ */
+function _shiftChunkOffsets(data, start, end, threshold, delta) {
+  if (delta === 0) return;
+  let pos = start;
+  while (pos + 8 <= end) {
+    const size = _readU32BE(data, pos);
+    if (size < 8 || pos + size > end) break;
+    const t = String.fromCharCode(data[pos+4], data[pos+5], data[pos+6], data[pos+7]);
+    if (t === "stco") {
+      // FullBox: 8-byte header + 4-byte version/flags + 4-byte entry_count + N×4-byte offsets
+      const count = _readU32BE(data, pos + 12);
+      for (let i = 0; i < count; i++) {
+        const o = pos + 16 + i * 4;
+        const v = _readU32BE(data, o);
+        if (v > threshold) _writeU32BE(data, o, v + delta);
+      }
+    } else if (t === "co64") {
+      // FullBox: 8-byte header + 4-byte version/flags + 4-byte entry_count + N×8-byte offsets
+      const count = _readU32BE(data, pos + 12);
+      for (let i = 0; i < count; i++) {
+        const o = pos + 16 + i * 8;
+        const hi = _readU32BE(data, o);
+        const lo = _readU32BE(data, o + 4);
+        if (hi > 0 || (hi === 0 && lo > threshold)) {
+          const newLo = (lo + delta) >>> 0;
+          const carry = (lo + delta) > 0xFFFFFFFF ? 1 : 0;
+          _writeU32BE(data, o, hi + carry);
+          _writeU32BE(data, o + 4, newLo);
+        }
+      }
+    } else if (t === "trak" || t === "mdia" || t === "minf" || t === "stbl") {
+      _shiftChunkOffsets(data, pos + 8, pos + size, threshold, delta);
+    }
+    pos += size;
+  }
+}
+
+/**
  * Inject a JPEG image as a 'covr' atom into an M4A (MPEG-4) file.
- * Locates the moov > udta > meta > ilst hierarchy and inserts/replaces
- * the 'covr' atom.  All ancestor box sizes are updated accordingly.
+ *
+ * Searches for the ilst container via multiple common paths:
+ *   moov > udta > meta > ilst  (iTunes/QuickTime — standard BTS files)
+ *   moov > meta > ilst         (no udta wrapper)
+ *   moov > ilst                (bare ilst directly under moov)
+ *
+ * If no ilst is found (e.g. fMP4 / DASH streams that lack iTunes metadata),
+ * a full udta > meta > hdlr > ilst structure is created from scratch.
+ *
+ * After inserting or replacing the covr atom all ancestor box sizes are
+ * updated, and the stco/co64 chunk-offset tables are adjusted so that audio
+ * data is still found at the correct position in the file.
  *
  * @param {Uint8Array} m4aData   Raw M4A file bytes
  * @param {Uint8Array} jpegBytes JPEG image bytes
@@ -317,51 +373,130 @@ function injectM4aCover(m4aData, jpegBytes) {
   covrAtom.set([0x63, 0x6F, 0x76, 0x72], off); off += 4; // "covr"
   cv.setUint32(off, dataAtomSize, false); off += 4;
   covrAtom.set([0x64, 0x61, 0x74, 0x61], off); off += 4; // "data"
-  cv.setUint32(off, 0x0000000D, false); off += 4;         // type: JPEG
+  cv.setUint32(off, 0x0000000D, false); off += 4;         // type indicator: JPEG
   cv.setUint32(off, 0, false); off += 4;                  // locale
   covrAtom.set(jpegBytes, off);
 
-  // Locate the atom hierarchy
   const moov = _findBox(m4aData, "moov", 0, m4aData.length);
   if (!moov) return m4aData;
 
+  // Try multiple possible ilst locations (highest-precedence first):
+  //   Path 1: moov > udta > meta > ilst  (iTunes standard, BTS manifests)
+  //   Path 2: moov > meta > ilst         (no udta wrapper)
+  //   Path 3: moov > ilst                (bare ilst under moov)
+  // ancestors = boxes whose sizes must grow by delta, listed inner→outer (moov last)
+  let ilst = null;
+  let ancestors = [];
+
   const udta = _findBox(m4aData, "udta", moov.start + 8, moov.start + moov.size);
-  if (!udta) return m4aData;
-
-  // 'meta' is a FullBox — its data starts 4 bytes after the regular header (version+flags)
-  const meta = _findBox(m4aData, "meta", udta.start + 8, udta.start + udta.size);
-  if (!meta) return m4aData;
-
-  const ilst = _findBox(m4aData, "ilst", meta.start + 12, meta.start + meta.size);
-  if (!ilst) return m4aData;
-
-  // Find any existing 'covr' to replace, or insert at end of ilst
-  const existingCovr = _findBox(m4aData, "covr", ilst.start + 8, ilst.start + ilst.size);
-
-  let result;
-  let delta;
-  if (existingCovr) {
-    delta = covrAtom.length - existingCovr.size;
-    result = new Uint8Array(m4aData.length + delta);
-    result.set(m4aData.slice(0, existingCovr.start));
-    result.set(covrAtom, existingCovr.start);
-    result.set(m4aData.slice(existingCovr.start + existingCovr.size),
-               existingCovr.start + covrAtom.length);
-  } else {
-    // Append covr at the end of ilst
-    delta = covrAtom.length;
-    const insertPos = ilst.start + ilst.size;
-    result = new Uint8Array(m4aData.length + delta);
-    result.set(m4aData.slice(0, insertPos));
-    result.set(covrAtom, insertPos);
-    result.set(m4aData.slice(insertPos), insertPos + covrAtom.length);
+  if (udta) {
+    // 'meta' is a FullBox — children start 4 bytes after the regular 8-byte header
+    const metaU = _findBox(m4aData, "meta", udta.start + 8, udta.start + udta.size);
+    if (metaU) {
+      const il = _findBox(m4aData, "ilst", metaU.start + 12, metaU.start + metaU.size);
+      if (il) { ilst = il; ancestors = [metaU, udta, moov]; }
+    }
+  }
+  if (!ilst) {
+    const metaM = _findBox(m4aData, "meta", moov.start + 8, moov.start + moov.size);
+    if (metaM) {
+      const il = _findBox(m4aData, "ilst", metaM.start + 12, metaM.start + metaM.size);
+      if (il) { ilst = il; ancestors = [metaM, moov]; }
+    }
+  }
+  if (!ilst) {
+    const il = _findBox(m4aData, "ilst", moov.start + 8, moov.start + moov.size);
+    if (il) { ilst = il; ancestors = [moov]; }
   }
 
-  // Update ancestor box sizes (their start positions are unchanged — all precede the edit)
-  _writeU32BE(result, ilst.start, _readU32BE(result, ilst.start) + delta);
-  _writeU32BE(result, meta.start, _readU32BE(result, meta.start) + delta);
-  _writeU32BE(result, udta.start, _readU32BE(result, udta.start) + delta);
-  _writeU32BE(result, moov.start, _readU32BE(result, moov.start) + delta);
+  if (ilst) {
+    // Find any existing 'covr' to replace, or append a new one at the end of ilst
+    const existingCovr = _findBox(m4aData, "covr", ilst.start + 8, ilst.start + ilst.size);
+
+    let result, delta;
+    if (existingCovr) {
+      delta = covrAtom.length - existingCovr.size;
+      result = new Uint8Array(m4aData.length + delta);
+      result.set(m4aData.slice(0, existingCovr.start));
+      result.set(covrAtom, existingCovr.start);
+      result.set(m4aData.slice(existingCovr.start + existingCovr.size),
+                 existingCovr.start + covrAtom.length);
+    } else {
+      delta = covrAtom.length;
+      const insertPos = ilst.start + ilst.size;
+      result = new Uint8Array(m4aData.length + delta);
+      result.set(m4aData.slice(0, insertPos));
+      result.set(covrAtom, insertPos);
+      result.set(m4aData.slice(insertPos), insertPos + covrAtom.length);
+    }
+
+    // Update ilst size and all ancestor box sizes
+    _writeU32BE(result, ilst.start, _readU32BE(result, ilst.start) + delta);
+    for (const anc of ancestors) {
+      _writeU32BE(result, anc.start, _readU32BE(result, anc.start) + delta);
+    }
+
+    // Fix absolute chunk offsets: inserting bytes inside moov shifts any mdat
+    // that sits after the edit point.  Adjust every stco/co64 entry that
+    // pointed beyond the first shifted byte.
+    if (delta !== 0) {
+      const threshold = existingCovr
+        ? existingCovr.start + existingCovr.size  // first byte shifted (replacement)
+        : ilst.start + ilst.size;                 // first byte shifted (insertion)
+      _shiftChunkOffsets(result, moov.start + 8, moov.start + moov.size + delta,
+                         threshold, delta);
+    }
+
+    return result;
+  }
+
+  // ── No ilst found ────────────────────────────────────────────────────────
+  // Build udta > meta (FullBox) > hdlr > ilst > covr from scratch and append
+  // it at the end of moov.  This handles fMP4 / DASH streams that carry no
+  // iTunes metadata atoms.
+
+  const ilstSize = 8 + covrAtomSize;
+  const ilstAtom = new Uint8Array(ilstSize);
+  new DataView(ilstAtom.buffer).setUint32(0, ilstSize, false);
+  ilstAtom.set([0x69, 0x6C, 0x73, 0x74], 4); // "ilst"
+  ilstAtom.set(covrAtom, 8);
+
+  // hdlr FullBox: size + "hdlr" + version/flags(0) + pre_defined(0) +
+  //              handler_type("mdir") + reserved[12] + name null-terminator
+  const hdlrSize = 4 + 4 + 4 + 4 + 4 + 12 + 1; // 33 bytes
+  const hdlrAtom = new Uint8Array(hdlrSize);
+  new DataView(hdlrAtom.buffer).setUint32(0, hdlrSize, false);
+  hdlrAtom.set([0x68, 0x64, 0x6C, 0x72], 4);  // "hdlr"
+  hdlrAtom.set([0x6D, 0x64, 0x69, 0x72], 16); // handler_type = "mdir"
+
+  // meta FullBox: size + "meta" + version/flags(0) + hdlr + ilst
+  const metaSize = 12 + hdlrSize + ilstSize;
+  const metaAtom = new Uint8Array(metaSize);
+  new DataView(metaAtom.buffer).setUint32(0, metaSize, false);
+  metaAtom.set([0x6D, 0x65, 0x74, 0x61], 4); // "meta"
+  metaAtom.set(hdlrAtom, 12);
+  metaAtom.set(ilstAtom, 12 + hdlrSize);
+
+  // udta: size + "udta" + meta
+  const udtaSize = 8 + metaSize;
+  const udtaAtom = new Uint8Array(udtaSize);
+  new DataView(udtaAtom.buffer).setUint32(0, udtaSize, false);
+  udtaAtom.set([0x75, 0x64, 0x74, 0x61], 4); // "udta"
+  udtaAtom.set(metaAtom, 8);
+
+  // Append udta right after the current end of moov
+  const insertPos = moov.start + moov.size;
+  const result = new Uint8Array(m4aData.length + udtaSize);
+  result.set(m4aData.slice(0, insertPos));
+  result.set(udtaAtom, insertPos);
+  result.set(m4aData.slice(insertPos), insertPos + udtaSize);
+
+  // Grow moov to encompass the new udta
+  _writeU32BE(result, moov.start, moov.size + udtaSize);
+
+  // Fix chunk offsets for any mdat that follows moov
+  _shiftChunkOffsets(result, moov.start + 8, moov.start + moov.size + udtaSize,
+                     insertPos, udtaSize);
 
   return result;
 }

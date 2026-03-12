@@ -473,14 +473,20 @@ function visibleQualityOptions() {
  * Build <option> elements for a quality <select>.
  * @param {string} selectedValue - The currently selected quality key.
  * @param {boolean} [detailed=false] - When true, use full descriptions (e.g. "High — 320 kbps · M4A").
+ * @param {string|null} [maxQuality=null] - When set, options above this quality tier are disabled.
  */
-function qualityOptions(selectedValue, detailed = false) {
+function qualityOptions(selectedValue, detailed = false, maxQuality = null) {
   const options = visibleQualityOptions();
+  const maxIdx = maxQuality ? QUALITY_ORDER.indexOf(maxQuality) : -1;
   return options.map((v) => {
-    const label = detailed
+    const baseLabel = detailed
       ? (QUALITY_DESCRIPTIONS[v] || QUALITY_LABELS[v] || v)
       : (QUALITY_LABELS[v] || v);
-    return `<option value="${v}"${v === selectedValue ? " selected" : ""}>${escHtml(label)}</option>`;
+    const vIdx = QUALITY_ORDER.indexOf(v);
+    // An option is unavailable when it is a higher tier than the item's known max quality
+    const unavailable = maxIdx !== -1 && vIdx !== -1 && vIdx < maxIdx;
+    const label = unavailable ? `${baseLabel} (n/a)` : baseLabel;
+    return `<option value="${v}"${v === selectedValue ? " selected" : ""}${unavailable ? " disabled" : ""}>${escHtml(label)}</option>`;
   }).join("");
 }
 
@@ -526,6 +532,9 @@ function rebuildQualityPicker() {
   // Update the associated tip element if present
   const tipEl = select.closest(".quality-picker-wrap")?.querySelector("[data-tip]");
   if (tipEl) tipEl.dataset.tip = qualityPickerTip();
+
+  // Reflect which quality tiers are actually available for the current queue
+  updateQualityPickerAvailability();
 }
 
 function syncQualityPicker() {
@@ -534,6 +543,57 @@ function syncQualityPicker() {
   rebuildQualityPicker();
   select.value = getTrackQuality();
   updateQualitySelectStyle(select);
+}
+
+/**
+ * Returns the quality that will actually be used for a queue item given the
+ * requested quality. When the item has a known `maxQuality` that is lower than
+ * the requested quality, the item's max quality is returned instead.
+ * @param {{maxQuality?: string|null}} item
+ * @param {string} requestedQuality
+ * @returns {string}
+ */
+function effectiveDownloadQuality(item, requestedQuality) {
+  if (!item.maxQuality) return requestedQuality;
+  const reqIdx = QUALITY_ORDER.indexOf(requestedQuality);
+  const maxIdx = QUALITY_ORDER.indexOf(item.maxQuality);
+  if (reqIdx === -1 || maxIdx === -1) return requestedQuality;
+  // QUALITY_ORDER is highest-first; a larger index means a lower quality tier.
+  // Cap the requested quality at the item's max by taking the larger (lower-quality) index.
+  return QUALITY_ORDER[Math.max(reqIdx, maxIdx)];
+}
+
+/**
+ * Enable or disable the HI_RES_LOSSLESS option in the global quality picker
+ * based on how many queued items with a known max quality actually support it.
+ * Items whose max quality is unknown (e.g. albums/playlists pasted by URL) are
+ * excluded from the count so they don't incorrectly suppress the option.
+ */
+function updateQualityPickerAvailability() {
+  const select = $("quality-select");
+  if (!select) return;
+
+  const knownItems = downloadQueue.filter((q) => q.maxQuality);
+  const anySupportsMax = knownItems.some((q) => q.maxQuality === "HI_RES_LOSSLESS");
+  const disableMax = knownItems.length > 0 && !anySupportsMax;
+
+  const maxOpt = select.querySelector('option[value="HI_RES_LOSSLESS"]');
+  if (!maxOpt) return;
+
+  if (disableMax) {
+    maxOpt.disabled = true;
+    maxOpt.textContent = "Max \u2014 not available";
+    if (select.value === "HI_RES_LOSSLESS") {
+      // Silently fall back to the next best tier without persisting the change
+      // so the preference is restored when Max becomes available again.
+      const fallback = QUALITY_ORDER.find((q) => q !== "HI_RES_LOSSLESS") ?? "LOSSLESS";
+      select.value = fallback;
+      updateQualitySelectStyle(select);
+    }
+  } else {
+    maxOpt.disabled = false;
+    maxOpt.textContent = QUALITY_DESCRIPTIONS.HI_RES_LOSSLESS || "Max \u2014 FLAC 24-bit";
+  }
 }
 
 function initQualityPicker() {
@@ -592,11 +652,17 @@ function renderQueue() {
       : `<div class="queue-item-thumb${item.coverRound ? " round" : ""}"></div>`;
 
     const q = item.quality || getSelectedQuality();
-    const qualityHtml = advanced
-      ? `<select class="queue-item-quality-sel" data-idx="${idx}" data-quality="${escHtml(q)}" aria-label="Quality for this item">
-           ${qualityOptions(q)}
-         </select>`
-      : `<span class="quality-pill-sm" data-quality="${escHtml(q)}">${escHtml(QUALITY_LABELS[q] || q)}</span>`;
+    let qualityHtml;
+    if (advanced) {
+      qualityHtml = `<select class="queue-item-quality-sel" data-idx="${idx}" data-quality="${escHtml(q)}" aria-label="Quality for this item">
+           ${qualityOptions(q, false, item.maxQuality || null)}
+         </select>`;
+    } else {
+      // In normal mode, show the quality that will actually be downloaded.
+      // When the global quality exceeds the item's known max, cap it.
+      const displayQ = effectiveDownloadQuality(item, q);
+      qualityHtml = `<span class="quality-pill-sm" data-quality="${escHtml(displayQ)}">${escHtml(QUALITY_LABELS[displayQ] || displayQ)}</span>`;
+    }
 
     return `<div class="queue-item" data-idx="${idx}">
       ${thumbHtml}
@@ -633,6 +699,7 @@ function renderQueue() {
   }
 
   updateSearchQueueBanner();
+  updateQualityPickerAvailability();
 }
 
 function addToQueue(item) {
@@ -780,7 +847,10 @@ async function handleDownload() {
 
   for (let qi = 0; qi < items.length; qi++) {
     const item         = items[qi];
-    const quality      = advanced ? (item.quality || globalQuality) : globalQuality;
+    const requestedQuality = advanced ? (item.quality || globalQuality) : globalQuality;
+    // Cap to the item's known max quality (fallback for multi-item queues where
+    // individual items may not support the selected tier).
+    const quality      = effectiveDownloadQuality(item, requestedQuality);
     const qStatusEl    = $(`queue-status-${qi}`);
     const queueItemEl  = $("download-queue")?.querySelector(`.queue-item[data-idx="${qi}"]`);
     const itemRowEl    = $(`dl-item-row-${qi}`);
@@ -928,17 +998,19 @@ function addUrlPill(raw) {
 async function enrichQueueItemFromUrl(type, id) {
   if (!isLoggedIn()) return;
   try {
-    let title = "", sub = "", cover = "", coverRound = false;
+    let title = "", sub = "", cover = "", coverRound = false, maxQuality = null;
     if (type === "track") {
       const data = await getTrack(id);
       title = data.title || "";
       sub   = data.artist?.name || "";
       cover = coverUrl(data.album?.cover);
+      maxQuality = effectiveQuality(data) || null;
     } else if (type === "album") {
       const data = await getAlbum(id);
       title = data.title || "";
       sub   = data.artist?.name || "";
       cover = coverUrl(data.cover);
+      maxQuality = effectiveQuality(data) || null;
     } else if (type === "playlist") {
       const data = await getPlaylist(id);
       title = data.title || "";
@@ -967,6 +1039,7 @@ async function enrichQueueItemFromUrl(type, id) {
       item.sub   = sub;
       item.cover = cover;
       item.coverRound = coverRound;
+      if (maxQuality) item.maxQuality = maxQuality;
       renderQueue();
     }
     // Also update the URL pill label so it shows the real title instead of type/id
@@ -1302,12 +1375,13 @@ function attachResultHandlers(container) {
 }
 
 function toggleResultInQueue(card) {
-  const type  = card.dataset.type;
-  const id    = card.dataset.id;
-  const title = card.dataset.title;
-  const sub   = card.dataset.sub;
-  const cover = card.dataset.cover;
-  const round = card.dataset.round === "true";
+  const type       = card.dataset.type;
+  const id         = card.dataset.id;
+  const title      = card.dataset.title;
+  const sub        = card.dataset.sub;
+  const cover      = card.dataset.cover;
+  const round      = card.dataset.round === "true";
+  const maxQuality = card.dataset.quality || null;
 
   const existing = downloadQueue.findIndex(
     (q) => q.type === type && String(q.id) === String(id)
@@ -1316,7 +1390,7 @@ function toggleResultInQueue(card) {
   if (existing !== -1) {
     removeFromQueue(existing);
   } else {
-    addToQueue({ type, id, title, sub, cover, coverRound: round });
+    addToQueue({ type, id, title, sub, cover, coverRound: round, maxQuality });
     card.classList.add("selected");
     card.setAttribute("aria-pressed", "true");
     // Update quick-add button
@@ -1598,7 +1672,8 @@ async function renderAlbumDetail(albumId, body, hintQuality = null) {
     const trackQuality = QUALITY_ORDER.find((q) => q === tq || q === albumQuality) || null;
     return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
         data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
-        data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
+        data-cover="${escHtml(coverArt)}" data-quality="${escHtml(trackQuality || '')}"
+        tabindex="0" role="button">
       <span class="detail-track-num">${i + 1}</span>
       <div class="detail-track-info">
         <span class="detail-track-title">${escHtml(displayTitle)}</span>
@@ -1623,7 +1698,8 @@ async function renderAlbumDetail(albumId, body, hintQuality = null) {
       } else {
         const coverArt = coverUrl(albumMeta.cover);
         addToQueue({ type: "track", id: trackId, title: row.dataset.title,
-          sub: row.dataset.artist, cover: coverArt, coverRound: false });
+          sub: row.dataset.artist, cover: coverArt, coverRound: false,
+          maxQuality: row.dataset.quality || null });
         row.classList.add("selected");
         if (btn) btn.textContent = "\u2713 Added";
         appendLog(`Added track/${trackId} to queue.`, "info");
@@ -1664,15 +1740,17 @@ async function renderPlaylistDetail(playlistId, body) {
     const inQ = downloadQueue.some((q) => q.type === "track" && String(q.id) === String(t.id));
     const coverArt = coverUrl(t.album?.cover);
     const displayTitle = formatTrackTitle(t);
+    const tq = effectiveQuality(t);
     return `<div class="detail-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
         data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
-        data-cover="${escHtml(coverArt)}" tabindex="0" role="button">
+        data-cover="${escHtml(coverArt)}" data-quality="${escHtml(tq || '')}"
+        tabindex="0" role="button">
       <span class="detail-track-num">${i + 1}</span>
       <div class="detail-track-info">
         <span class="detail-track-title">${escHtml(displayTitle)}</span>
         <span class="detail-track-artist">${escHtml(t.artist?.name || "")}</span>
       </div>
-      ${qualityPill(effectiveQuality(t))}
+      ${qualityPill(tq)}
       <button class="detail-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
     </div>`;
   }).join("")}</div>`;
@@ -1688,7 +1766,8 @@ async function renderPlaylistDetail(playlistId, body) {
         if (btn) btn.textContent = "+ Add";
       } else {
         addToQueue({ type: "track", id: trackId, title: row.dataset.title,
-          sub: row.dataset.artist, cover: row.dataset.cover, coverRound: false });
+          sub: row.dataset.artist, cover: row.dataset.cover, coverRound: false,
+          maxQuality: row.dataset.quality || null });
         row.classList.add("selected");
         if (btn) btn.textContent = "\u2713 Added";
         appendLog(`Added track/${trackId} to queue.`, "info");
@@ -1821,15 +1900,17 @@ function renderLibraryContent(items) {
         ? (t._dateAdded.length >= 10 ? t._dateAdded.slice(0, 10) : t._dateAdded)
         : "";
       const displayTitle = formatTrackTitle(t);
+      const tq = effectiveQuality(t);
       return `<div class="library-track-item${inQ ? " selected" : ""}" data-id="${t.id}"
           data-title="${escHtml(displayTitle)}" data-artist="${escHtml(t.artist?.name || "")}"
-          data-cover="${escHtml(coverUrl(t.album?.cover))}" tabindex="0" role="button">
+          data-cover="${escHtml(coverUrl(t.album?.cover))}" data-quality="${escHtml(tq || '')}"
+          tabindex="0" role="button">
         ${cover ? `<img src="${escHtml(cover)}" class="library-track-thumb" alt="" loading="lazy"/>` : `<div class="library-track-thumb"></div>`}
         <div class="library-track-info">
           <span class="library-track-title">${escHtml(displayTitle)}</span>
           <span class="library-track-artist">${escHtml(t.artist?.name || "")}</span>
         </div>
-        ${qualityPill(effectiveQuality(t))}
+        ${qualityPill(tq)}
         ${dateLabel ? `<span class="library-track-date">${escHtml(dateLabel)}</span>` : ""}
         <button class="library-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
       </div>`;
@@ -1846,7 +1927,8 @@ function renderLibraryContent(items) {
           if (btn) btn.textContent = "+ Add";
         } else {
           addToQueue({ type: "track", id: trackId, title: row.dataset.title,
-            sub: row.dataset.artist, cover: row.dataset.cover, coverRound: false });
+            sub: row.dataset.artist, cover: row.dataset.cover, coverRound: false,
+            maxQuality: row.dataset.quality || null });
           row.classList.add("selected");
           if (btn) btn.textContent = "\u2713 Added";
           appendLog(`Added track/${trackId} to queue.`, "info");

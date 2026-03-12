@@ -165,9 +165,12 @@ export async function getSession() {
 // ─── Streams ───────────────────────────────────────────────────────────────
 
 export async function getTrackStream(trackId, quality = "HIGH") {
+  // Dolby Atmos and Sony 360RA are spatial-audio formats that Tidal only
+  // serves via the OFFLINE playback mode — STREAM returns "Resource not found".
+  const isSpatial = quality === "DOLBY_ATMOS" || quality === "SONY_360RA";
   return apiFetch(`tracks/${trackId}/playbackinfopostpaywall`, {
     audioquality: quality,
-    playbackmode: "STREAM",
+    playbackmode: isSpatial ? "OFFLINE" : "STREAM",
     assetpresentation: "FULL",
   });
 }

@@ -1465,7 +1465,15 @@ main { flex: 1; padding: 0; overflow: hidden; display: flex; flex-direction: col
   font-size: 1.5rem; font-weight: 800; letter-spacing: -0.4px; margin-bottom: var(--sp-1);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.detail-sub { font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: var(--sp-4); }
+.detail-sub { font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: var(--sp-2); }
+.detail-header-meta {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  margin-bottom: var(--sp-4);
+  min-height: 1.4em;
+}
+.detail-meta-text {
+  font-size: 0.8rem; color: var(--color-text-muted); font-variant-numeric: tabular-nums;
+}
 .detail-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
 
 /* Detail queue button: in-queue state shows removal action */

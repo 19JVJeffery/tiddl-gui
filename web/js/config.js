@@ -151,6 +151,14 @@ export const QUALITY_LABELS = {
   LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",
 };
 
+/** Detailed option text for quality tier selects. */
+export const QUALITY_DESCRIPTIONS = {
+  LOW:            "Low — 96 kbps · M4A",
+  HIGH:           "High — 320 kbps · M4A",
+  LOSSLESS:       "HiFi — FLAC 16-bit",
+  HI_RES_LOSSLESS: "Max — FLAC 24-bit",
+};
+
 /** Available quality tiers, highest first. */
 export const QUALITY_STANDARD = ["HI_RES_LOSSLESS", "LOSSLESS", "HIGH", "LOW"];
 

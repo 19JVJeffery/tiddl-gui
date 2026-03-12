@@ -563,6 +563,9 @@ function initQualityPicker() {
 
 const downloadQueue = [];
 
+const CARD_QUEUE_BTN_PLUS = `<svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+const LIBRARY_TRACK_ADD_TEXT = "+ Add";
+
 function renderQueue() {
   const queueEl = $("download-queue");
   const section = $("download-queue-section");
@@ -658,15 +661,26 @@ function removeFromQueue(idx) {
       document.querySelectorAll(`.url-pill[data-type="${item.type}"][data-id="${item.id}"]`)
         .forEach((p) => p.remove());
     }
-    // Deselect search result cards
+    // Deselect search/library result cards and reset their queue button
     document.querySelectorAll(`.result-card[data-type="${item.type}"][data-id="${item.id}"]`)
-      .forEach((c) => { c.classList.remove("selected"); c.setAttribute("aria-pressed", "false"); });
+      .forEach((c) => {
+        c.classList.remove("selected"); c.setAttribute("aria-pressed", "false");
+        const qaBtn = c.querySelector(".card-queue-btn");
+        if (qaBtn) {
+          qaBtn.classList.remove("in-queue");
+          qaBtn.innerHTML = CARD_QUEUE_BTN_PLUS;
+        }
+      });
     // Deselect detail track items
     document.querySelectorAll(`.detail-track-item[data-id="${item.id}"]`)
       .forEach((c) => c.classList.remove("selected"));
-    // Deselect library track items
+    // Deselect library track items and reset their add button
     document.querySelectorAll(`.library-track-item[data-id="${item.id}"]`)
-      .forEach((c) => c.classList.remove("selected"));
+      .forEach((c) => {
+        c.classList.remove("selected");
+        const btn = c.querySelector(".library-track-add");
+        if (btn) btn.textContent = LIBRARY_TRACK_ADD_TEXT;
+      });
   }
 }
 
@@ -674,10 +688,19 @@ function clearQueue() {
   downloadQueue.length = 0;
   document.querySelectorAll(".result-card.selected").forEach((c) => {
     c.classList.remove("selected"); c.setAttribute("aria-pressed", "false");
+    const qaBtn = c.querySelector(".card-queue-btn");
+    if (qaBtn) {
+      qaBtn.classList.remove("in-queue");
+      qaBtn.innerHTML = CARD_QUEUE_BTN_PLUS;
+    }
   });
   document.querySelectorAll(".url-pill").forEach((p) => p.remove());
-  document.querySelectorAll(".detail-track-item.selected,.library-track-item.selected")
-    .forEach((c) => c.classList.remove("selected"));
+  document.querySelectorAll(".detail-track-item.selected").forEach((c) => c.classList.remove("selected"));
+  document.querySelectorAll(".library-track-item.selected").forEach((c) => {
+    c.classList.remove("selected");
+    const btn = c.querySelector(".library-track-add");
+    if (btn) btn.textContent = LIBRARY_TRACK_ADD_TEXT;
+  });
   renderQueue();
 }
 

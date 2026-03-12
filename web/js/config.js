@@ -146,6 +146,23 @@ export function setM3uAllowed(v)         { setSetting("tiddl_m3u_allowed", JSON.
 export function getAdvancedMode()        { return getSetting("tiddl_advanced_mode", "false") === "true"; }
 export function setAdvancedMode(v)       { setSetting("tiddl_advanced_mode", v ? "true" : "false"); }
 
+// ─── Experimental quality mode ────────────────────────────────────────────────
+
+export function getExperimentalQuality() { return getSetting("tiddl_experimental_quality", "false") === "true"; }
+export function setExperimentalQuality(v){ setSetting("tiddl_experimental_quality", v ? "true" : "false"); }
+
+/** Labels for all quality tiers (standard + experimental). */
+export const QUALITY_LABELS = {
+  LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",
+  DOLBY_ATMOS: "Dolby Atmos", SONY_360RA: "Sony 360RA",
+};
+
+/** Standard (always-available) quality tiers, highest first. */
+export const QUALITY_STANDARD = ["HI_RES_LOSSLESS", "LOSSLESS", "HIGH", "LOW"];
+
+/** Extra tiers shown only in experimental quality mode. */
+export const QUALITY_EXPERIMENTAL = ["DOLBY_ATMOS", "SONY_360RA"];
+
 // ─── Search history ───────────────────────────────────────────────────────────
 
 const SEARCH_HISTORY_KEY  = "tiddl_search_history";

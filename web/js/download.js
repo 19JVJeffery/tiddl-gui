@@ -686,7 +686,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
  * @param {Function} onProgress (downloaded, total, message) => void
  * @returns {Promise<{filename: string, success: boolean, error?: string}>}
  */
-export async function downloadTrack(trackId, quality = "HIGH", onProgress) {
+export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameSuffix = "") {
   try {
     let { data, extension, title, artist, coverHash } = await fetchTrackData(trackId, quality, onProgress);
     if (getMetadataCover() && coverHash) {
@@ -694,7 +694,7 @@ export async function downloadTrack(trackId, quality = "HIGH", onProgress) {
       const cover = await fetchCoverArt(coverHash, getCoverSize());
       if (cover) data = embedCoverArt(data, extension, cover);
     }
-    const filename = `${artist} - ${title}${extension}`;
+    const filename = `${artist} - ${title}${nameSuffix}${extension}`;
     triggerDownload(data, filename, extToMime(extension));
     return { filename, success: true };
   } catch (err) {
@@ -706,7 +706,7 @@ export async function downloadTrack(trackId, quality = "HIGH", onProgress) {
  * Download all tracks in an album as a single ZIP file.
  * ZIP folder structure: `{albumArtist} - {albumTitle}/{track#}. {artist} - {title}.ext`
  */
-export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSubItemProgress) {
+export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSubItemProgress, nameSuffix = "") {
   try {
     onProgress?.(0, 1, `Fetching album info…`);
     const [albumMeta, itemsData] = await Promise.all([
@@ -754,7 +754,7 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
     if (zipFiles.length > 0) {
       onProgress?.(items.length, items.length, `Packaging ${zipFiles.length} track(s) as ZIP…`);
       const zip = buildZip(zipFiles);
-      triggerDownload(zip, `${folder}.zip`, "application/zip");
+      triggerDownload(zip, `${folder}${nameSuffix}.zip`, "application/zip");
     }
 
     return results;
@@ -767,7 +767,7 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
  * Download all tracks in a playlist as a single ZIP file.
  * ZIP folder structure: `{playlistTitle}/{track#}. {artist} - {title}.ext`
  */
-export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress, onSubItemProgress) {
+export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress, onSubItemProgress, nameSuffix = "") {
   try {
     onProgress?.(0, 1, `Fetching playlist info…`);
     const [playlistMeta, itemsData] = await Promise.all([
@@ -816,7 +816,7 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
     if (zipFiles.length > 0) {
       onProgress?.(items.length, items.length, `Packaging ${zipFiles.length} track(s) as ZIP…`);
       const zip = buildZip(zipFiles);
-      triggerDownload(zip, `${folder}.zip`, "application/zip");
+      triggerDownload(zip, `${folder}${nameSuffix}.zip`, "application/zip");
     }
 
     return results;
@@ -829,7 +829,7 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
  * Download all tracks in a mix as a single ZIP file.
  * ZIP folder structure: `Mix/{track#}. {artist} - {title}.ext`
  */
-export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItemProgress) {
+export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItemProgress, nameSuffix = "") {
   try {
     onProgress?.(0, 1, `Fetching mix items…`);
     const itemsData = await getMixItems(mixId, 100, 0);
@@ -872,7 +872,7 @@ export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItem
     if (zipFiles.length > 0) {
       onProgress?.(items.length, items.length, `Packaging ${zipFiles.length} track(s) as ZIP…`);
       const zip = buildZip(zipFiles);
-      triggerDownload(zip, `${folder}.zip`, "application/zip");
+      triggerDownload(zip, `${folder}${nameSuffix}.zip`, "application/zip");
     }
 
     return results;
@@ -922,7 +922,7 @@ export function parseTidalInput(input) {
  * Each album is packaged as its own ZIP file, downloaded in sequence.
  * Returns an array of per-album result arrays.
  */
-export async function downloadArtistAlbums(artistId, quality = "HIGH", onProgress, onSubItemProgress) {
+export async function downloadArtistAlbums(artistId, quality = "HIGH", onProgress, onSubItemProgress, nameSuffix = "") {
   try {
     onProgress?.(0, 1, "Fetching artist discography…");
     const [albumsData, singlesData] = await Promise.all([
@@ -945,7 +945,9 @@ export async function downloadArtistAlbums(artistId, quality = "HIGH", onProgres
       onProgress?.(i, all.length, `Album ${i + 1}/${all.length}: ${album.title}`);
       onSubItemProgress?.(i, all.length, album.title, 0, 1, "active");
       const res = await downloadAlbum(album.id, quality, (d, t, msg) =>
-        onProgress?.(i, all.length, `Album ${i + 1}/${all.length}: ${msg || ""}`)
+        onProgress?.(i, all.length, `Album ${i + 1}/${all.length}: ${msg || ""}`),
+        undefined,
+        nameSuffix,
       );
       const allOk = Array.isArray(res) ? res.every((r) => r.success) : res?.success;
       onSubItemProgress?.(i, all.length, album.title, 1, 1, allOk ? "done" : "failed");

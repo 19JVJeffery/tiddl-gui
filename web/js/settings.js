@@ -30,6 +30,7 @@ import {
   getM3uSave, setM3uSave,
   getM3uAllowed, setM3uAllowed,
   getAdvancedMode, setAdvancedMode,
+  getAllQualitiesMode, setAllQualitiesMode,
   QUALITY_LABELS, QUALITY_STANDARD,
   getTemplate, setTemplate,
   TEMPLATE_DEFAULTS,
@@ -432,6 +433,7 @@ export function loadSettingsForm() {
   setChk("setting-update-mtime",     getUpdateMtime());
   setChk("setting-rewrite-metadata", getRewriteMetadata());
   setChk("setting-advanced-mode",    getAdvancedMode());
+  setChk("setting-all-qualities",    getAllQualitiesMode());
 
   setChk("setting-meta-enable",       getMetadataEnable());
   setChk("setting-meta-lyrics",       getMetadataLyrics());
@@ -508,6 +510,7 @@ export function saveSettingsForm(appendLog) {
   setUpdateMtime(getChk("setting-update-mtime"));
   setRewriteMetadata(getChk("setting-rewrite-metadata"));
   setAdvancedMode(getChk("setting-advanced-mode"));
+  setAllQualitiesMode(getChk("setting-all-qualities"));
 
   setMetadataEnable(getChk("setting-meta-enable"));
   setMetadataLyrics(getChk("setting-meta-lyrics"));
@@ -599,4 +602,42 @@ export function initThemeUI() {
   });
   // Note: the header quick-toggle (#theme-toggle) is wired in app.js so it can
   // also update the theme icon; do NOT add a second handler here.
+}
+
+// ─── Experimental setting UI ──────────────────────────────────────────────────
+
+/**
+ * Set up live mutual exclusion between "All Qualities Mode" and "Advanced Mode"
+ * and manage the disabled state of the track quality dropdown in the settings
+ * panel.  Call once on page load after the settings form has been rendered.
+ */
+export function initExperimentalSettingUI() {
+  const allQualitiesCb   = el("setting-all-qualities");
+  const advancedModeCb   = el("setting-advanced-mode");
+  const trackQualitySel  = el("setting-track-quality");
+
+  function syncUI() {
+    const allOn = allQualitiesCb?.checked ?? false;
+    const advOn = advancedModeCb?.checked ?? false;
+
+    // All-qualities and advanced mode are mutually exclusive
+    if (allQualitiesCb) {
+      allQualitiesCb.disabled = advOn;
+      allQualitiesCb.closest(".checkbox-label")?.classList.toggle("field-disabled", advOn);
+    }
+    if (advancedModeCb) {
+      advancedModeCb.disabled = allOn;
+      advancedModeCb.closest(".checkbox-label")?.classList.toggle("field-disabled", allOn);
+    }
+
+    // Blank out the track quality dropdown when all-qualities mode is active
+    if (trackQualitySel) {
+      trackQualitySel.disabled = allOn;
+      trackQualitySel.closest(".field-group")?.classList.toggle("field-disabled", allOn);
+    }
+  }
+
+  allQualitiesCb?.addEventListener("change", syncUI);
+  advancedModeCb?.addEventListener("change", syncUI);
+  syncUI();
 }

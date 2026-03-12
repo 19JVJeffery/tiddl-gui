@@ -26,7 +26,7 @@ import {
   downloadPlaylist, downloadMix, downloadArtistAlbums,
 } from "./download.js";
 import {
-  getTheme, getAccentColor, getTrackQuality, setTrackQuality, getAdvancedMode,
+  getTheme, getAccentColor, getTrackQuality, setTrackQuality, getAdvancedMode, getAllQualitiesMode,
   QUALITY_LABELS, QUALITY_DESCRIPTIONS, QUALITY_STANDARD,
   loadSearchHistory, saveToSearchHistory, clearSearchHistory,
 } from "./config.js";
@@ -35,6 +35,7 @@ import {
   initThemeUI, initAccentColorUI,
   initTemplateBuilders, loadSettingsForm, saveSettingsForm,
   initBrowserChrome, initUiEffectsUI,
+  initExperimentalSettingUI,
 } from "./settings.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -621,6 +622,35 @@ function initQualityPicker() {
   });
 }
 
+/**
+ * Sync the downloads-panel UI to reflect the current all-qualities mode state.
+ * - Disables/re-enables the main quality picker.
+ * - Shows or hides the all-qualities info banner.
+ * - Re-renders the queue to update per-item quality indicators.
+ */
+function updateAllQualitiesUI() {
+  const on = getAllQualitiesMode();
+  const select = $("quality-select");
+  const banner = $("all-qualities-banner");
+  const qualityWrap = select?.closest(".quality-picker-wrap");
+
+  if (select) {
+    select.disabled = on;
+    if (on) {
+      select.dataset.quality = "";
+    } else {
+      updateQualitySelectStyle(select);
+    }
+  }
+  if (qualityWrap) {
+    qualityWrap.classList.toggle("quality-picker-disabled", on);
+  }
+  if (banner) {
+    banner.classList.toggle("hidden", !on);
+  }
+  renderQueue();
+}
+
 // ─── Download queue ───────────────────────────────────────────────────────────
 
 const downloadQueue = [];
@@ -645,6 +675,7 @@ function renderQueue() {
   if (countEl) countEl.textContent = String(downloadQueue.length);
 
   const advanced = getAdvancedMode();
+  const allQualities = getAllQualitiesMode();
 
   queueEl.innerHTML = downloadQueue.map((item, idx) => {
     const thumbHtml = item.cover
@@ -653,7 +684,10 @@ function renderQueue() {
 
     const q = item.quality || getSelectedQuality();
     let qualityHtml;
-    if (advanced) {
+    if (allQualities) {
+      // In all-qualities mode, show a pill indicating all tiers will be downloaded
+      qualityHtml = `<span class="quality-pill-sm all-qualities-pill">All Qualities</span>`;
+    } else if (advanced) {
       qualityHtml = `<select class="queue-item-quality-sel" data-idx="${idx}" data-quality="${escHtml(q)}" aria-label="Quality for this item">
            ${qualityOptions(q, false, item.maxQuality || null)}
          </select>`;
@@ -832,9 +866,10 @@ async function handleDownload() {
     return;
   }
 
-  const globalQuality = getSelectedQuality();
-  const advanced      = getAdvancedMode();
-  const downloadBtn   = $("btn-download");
+  const globalQuality   = getSelectedQuality();
+  const advanced        = getAdvancedMode();
+  const allQualitiesMode = getAllQualitiesMode();
+  const downloadBtn     = $("btn-download");
   downloadBtn.disabled = true;
   clearLog();
   // Expand the pinned status bar so progress is immediately visible
@@ -864,7 +899,11 @@ async function handleDownload() {
       itemRowEl.classList.add("dl-item-row--active");
     }
 
-    appendLog(`Downloading ${item.type}/${item.id} @ ${QUALITY_LABELS[quality] || quality}`, "info");
+    if (allQualitiesMode) {
+      appendLog(`Downloading ${item.type}/${item.id} in all quality tiers`, "info");
+    } else {
+      appendLog(`Downloading ${item.type}/${item.id} @ ${QUALITY_LABELS[quality] || quality}`, "info");
+    }
     if (qStatusEl)  qStatusEl.textContent  = "\u23f3";
     if (itemIconEl) itemIconEl.textContent = "\u23f3";
 
@@ -884,16 +923,30 @@ async function handleDownload() {
 
     try {
       let results = [];
-      switch (item.type) {
-        case "track":    results = [await downloadTrack(item.id, quality, onProgress)]; break;
-        case "album":    results = await downloadAlbum(item.id, quality, onProgress, onSubItemProgress); break;
-        case "playlist": results = await downloadPlaylist(item.id, quality, onProgress, onSubItemProgress); break;
-        case "mix":      results = await downloadMix(item.id, quality, onProgress, onSubItemProgress); break;
-        case "artist":   results = await downloadArtistAlbums(item.id, quality, onProgress, onSubItemProgress); break;
-        default:
-          appendLog(`Resource type "${item.type}" not yet supported in the browser.`, "warn");
-          results = [{ filename: String(item.id), success: false, error: "unsupported type" }];
+
+      // Determine which quality tiers to download
+      const tiersToDownload = allQualitiesMode ? QUALITY_STANDARD : [quality];
+
+      for (const tier of tiersToDownload) {
+        const tierQuality = allQualitiesMode ? effectiveDownloadQuality(item, tier) : tier;
+        const nameSuffix  = allQualitiesMode ? ` [${QUALITY_LABELS[tier] || tier}]` : "";
+        if (allQualitiesMode) {
+          appendLog(`  \u21b3 ${QUALITY_LABELS[tier] || tier}`, "info");
+        }
+        let tierResults = [];
+        switch (item.type) {
+          case "track":    tierResults = [await downloadTrack(item.id, tierQuality, onProgress, nameSuffix)]; break;
+          case "album":    tierResults = await downloadAlbum(item.id, tierQuality, onProgress, onSubItemProgress, nameSuffix); break;
+          case "playlist": tierResults = await downloadPlaylist(item.id, tierQuality, onProgress, onSubItemProgress, nameSuffix); break;
+          case "mix":      tierResults = await downloadMix(item.id, tierQuality, onProgress, onSubItemProgress, nameSuffix); break;
+          case "artist":   tierResults = await downloadArtistAlbums(item.id, tierQuality, onProgress, onSubItemProgress, nameSuffix); break;
+          default:
+            appendLog(`Resource type "${item.type}" not yet supported in the browser.`, "warn");
+            tierResults = [{ filename: String(item.id), success: false, error: "unsupported type" }];
+        }
+        results = results.concat(tierResults);
       }
+
       for (const r of results) {
         if (r.success) { appendLog(`\u2713 Saved: ${r.filename}`, "success"); totalOk++; }
         else           { appendLog(`\u2717 Failed: ${r.filename} \u2014 ${r.error}`, "error"); totalFail++; }
@@ -1982,6 +2035,8 @@ function handleSaveSettings() {
   renderQueue();
   // Sync quality picker with saved setting (without re-attaching event listeners)
   syncQualityPicker();
+  // Sync all-qualities mode UI (banner, disabled state of picker)
+  updateAllQualitiesUI();
   const msg = $("settings-save-msg");
   if (msg) {
     msg.classList.add("visible");
@@ -2241,10 +2296,12 @@ export function init() {
   initAccentColorUI(appendLog);
   initUiEffectsUI();
   initTemplateBuilders();
+  initExperimentalSettingUI();
 
   // Initial state
   updateAuthBadge();
   loadSettingsForm();
+  updateAllQualitiesUI();
 
   if (!isLoggedIn()) {
     activateTab("auth");

@@ -51,6 +51,19 @@ function qualityPill(quality) {
   return `<span class="quality-pill-sm" data-quality="${escHtml(quality)}">${escHtml(QUALITY_LABELS[quality])}</span>`;
 }
 
+/**
+ * Returns the best available quality key for a track or album object.
+ * Tidal's `audioQuality` field can report `LOSSLESS` even for Hi-Res content;
+ * the authoritative indicator is `mediaMetadata.tags` which includes
+ * `"HIRES_LOSSLESS"` when the Max tier is available.
+ */
+function effectiveQuality(item) {
+  if (!item) return null;
+  const tags = item.mediaMetadata?.tags;
+  if (Array.isArray(tags) && tags.includes("HIRES_LOSSLESS")) return "HI_RES_LOSSLESS";
+  return item.audioQuality || null;
+}
+
 /** Returns the display title for a track, appending the version in parentheses when present. */
 function formatTrackTitle(track) {
   return track.version ? `${track.title} (${track.version})` : track.title;
@@ -1055,10 +1068,10 @@ function buildResultGrid(items, type, shownCount, totalCount) {
     let id, title, sub, cover, round = false, quality = null;
     if (type === "tracks") {
       id = item.id; title = formatTrackTitle(item); sub = item.artist?.name || "";
-      cover = coverUrl(item.album?.cover); quality = item.audioQuality;
+      cover = coverUrl(item.album?.cover); quality = effectiveQuality(item);
     } else if (type === "albums") {
       id = item.id; title = item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.cover); quality = item.audioQuality;
+      cover = coverUrl(item.cover); quality = effectiveQuality(item);
     } else if (type === "artists") {
       id = item.id; title = item.name; sub = "Artist";
       cover = coverUrl(item.picture); round = true;
@@ -1100,10 +1113,10 @@ function buildResultRowSection(items, type, heading, viewAllKey) {
     let id, title, sub, cover, round = false, quality = null;
     if (type === "tracks") {
       id = item.id; title = formatTrackTitle(item); sub = item.artist?.name || "";
-      cover = coverUrl(item.album?.cover); quality = item.audioQuality;
+      cover = coverUrl(item.album?.cover); quality = effectiveQuality(item);
     } else if (type === "albums") {
       id = item.id; title = item.title; sub = item.artist?.name || "";
-      cover = coverUrl(item.cover); quality = item.audioQuality;
+      cover = coverUrl(item.cover); quality = effectiveQuality(item);
     } else if (type === "artists") {
       id = item.id; title = item.name; sub = "Artist";
       cover = coverUrl(item.picture); round = true;
@@ -1388,7 +1401,7 @@ async function renderArtistDetail(artistId, artistName, body) {
   function makeAlbumCards(items) {
     return items.map((album) => {
       const c = coverUrl(album.cover);
-      return buildResultCard("album", album.id, album.title, album.releaseDate?.slice(0,4) || "", c, false, album.audioQuality);
+      return buildResultCard("album", album.id, album.title, album.releaseDate?.slice(0,4) || "", c, false, effectiveQuality(album));
     }).join("");
   }
 
@@ -1452,7 +1465,7 @@ async function renderAlbumDetail(albumId, body) {
 
   // Update the detail header quality pill with the album's max quality
   const headerQualityEl = $("detail-header-quality");
-  if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(albumMeta.audioQuality);
+  if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(effectiveQuality(albumMeta));
 
   // Populate the metadata row: track count, duration, year
   const headerMetaEl = $("detail-header-meta");
@@ -1469,8 +1482,8 @@ async function renderAlbumDetail(albumId, body) {
     if (totalDuration) parts.push(totalDuration);
     if (year) parts.push(year);
     headerMetaEl.innerHTML = parts.length
-      ? `<span class="detail-meta-text">${escHtml(parts.join(" \u00b7 "))}</span>${qualityPill(albumMeta.audioQuality)}`
-      : qualityPill(albumMeta.audioQuality);
+      ? `<span class="detail-meta-text">${escHtml(parts.join(" \u00b7 "))}</span>${qualityPill(effectiveQuality(albumMeta))}`
+      : qualityPill(effectiveQuality(albumMeta));
     // Hide the type-row quality span to avoid duplication when meta row is shown
     if (parts.length && headerQualityEl) headerQualityEl.innerHTML = "";
   }
@@ -1487,7 +1500,7 @@ async function renderAlbumDetail(albumId, body) {
         <span class="detail-track-title">${escHtml(displayTitle)}</span>
         <span class="detail-track-artist">${escHtml(t.artist?.name || "")}</span>
       </div>
-      ${qualityPill(t.audioQuality)}
+      ${qualityPill(effectiveQuality(t))}
       <button class="detail-track-add" title="Add to queue">
         ${inQ ? "\u2713 Added" : "+ Add"}
       </button>
@@ -1525,7 +1538,7 @@ async function renderPlaylistDetail(playlistId, body) {
   const tracks = (allItems || []).filter((i) => i.type === "track").map((i) => i.item);
 
   // Update the detail header quality pill with the playlist's highest available track quality
-  const maxPlaylistQuality = QUALITY_ORDER.find((q) => tracks.some((t) => t.audioQuality === q)) || null;
+  const maxPlaylistQuality = QUALITY_ORDER.find((q) => tracks.some((t) => effectiveQuality(t) === q)) || null;
   const headerQualityEl = $("detail-header-quality");
   if (headerQualityEl) headerQualityEl.innerHTML = qualityPill(maxPlaylistQuality);
 
@@ -1555,7 +1568,7 @@ async function renderPlaylistDetail(playlistId, body) {
         <span class="detail-track-title">${escHtml(displayTitle)}</span>
         <span class="detail-track-artist">${escHtml(t.artist?.name || "")}</span>
       </div>
-      ${qualityPill(t.audioQuality)}
+      ${qualityPill(effectiveQuality(t))}
       <button class="detail-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
     </div>`;
   }).join("")}</div>`;
@@ -1712,7 +1725,7 @@ function renderLibraryContent(items) {
           <span class="library-track-title">${escHtml(displayTitle)}</span>
           <span class="library-track-artist">${escHtml(t.artist?.name || "")}</span>
         </div>
-        ${qualityPill(t.audioQuality)}
+        ${qualityPill(effectiveQuality(t))}
         ${dateLabel ? `<span class="library-track-date">${escHtml(dateLabel)}</span>` : ""}
         <button class="library-track-add" title="Add to queue">${inQ ? "\u2713 Added" : "+ Add"}</button>
       </div>`;
@@ -1748,7 +1761,7 @@ function renderLibraryContent(items) {
       const title = item.title || item.name || "";
       const sub   = type === "album" ? (item.artist?.name || "") : (item.creator?.name || "Tidal");
       const cover = coverUrl(type === "album" ? item.cover : (item.image || item.squareImage));
-      const quality = type === "album" ? item.audioQuality : null;
+      const quality = type === "album" ? effectiveQuality(item) : null;
       html += buildResultCard(type, id, title, sub, cover, false, quality);
     }
     html += `</div>`;

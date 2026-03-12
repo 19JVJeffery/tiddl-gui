@@ -27,6 +27,8 @@ import {
 } from "./download.js";
 import {
   getTheme, getAccentColor, getTrackQuality, setTrackQuality, getAdvancedMode,
+  getExperimentalQuality,
+  QUALITY_LABELS, QUALITY_STANDARD, QUALITY_EXPERIMENTAL,
   loadSearchHistory, saveToSearchHistory, clearSearchHistory,
 } from "./config.js";
 import {
@@ -38,12 +40,10 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const QUALITY_LABELS = {
-  LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",
-};
+// QUALITY_LABELS, QUALITY_STANDARD, QUALITY_EXPERIMENTAL are imported from config.js
 
 /** Quality tiers ordered from highest to lowest, used to find the best quality in a collection. */
-const QUALITY_ORDER = ["HI_RES_LOSSLESS", "LOSSLESS", "HIGH", "LOW"];
+const QUALITY_ORDER = [...QUALITY_STANDARD];
 
 /** Returns HTML for a small quality pill, or empty string when quality is unknown. */
 function qualityPill(quality) {
@@ -465,13 +465,74 @@ async function handleLogout() {
 
 // ─── Quality ─────────────────────────────────────────────────────────────────
 
+/** Returns the quality options visible under the current experimental mode setting. */
+function visibleQualityOptions() {
+  const experimental = getExperimentalQuality();
+  return experimental
+    ? [...QUALITY_STANDARD, ...QUALITY_EXPERIMENTAL]
+    : QUALITY_STANDARD;
+}
+
+/**
+ * Build <option> elements for a quality <select>.
+ * Experimental options are annotated with "(experimental)" in the label.
+ */
+function qualityOptions(selectedValue) {
+  const experimental = getExperimentalQuality();
+  const options = visibleQualityOptions();
+  return options.map((v) => {
+    let label = QUALITY_LABELS[v] || v;
+    if (experimental && QUALITY_EXPERIMENTAL.includes(v)) label += " (experimental)";
+    return `<option value="${v}"${v === selectedValue ? " selected" : ""}>${escHtml(label)}</option>`;
+  }).join("");
+}
+
+/**
+ * Tooltip text for the quality picker — changes when experimental mode is on to
+ * explain the extra options and note that they may not always work.
+ */
+function qualityPickerTip() {
+  const experimental = getExperimentalQuality();
+  if (experimental) {
+    return "Experimental quality mode is ON. Standard: Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. "
+      + "Experimental: Dolby Atmos and Sony 360RA are spatial-audio formats — they may not be available for all tracks or subscriptions and are a work in progress.";
+  }
+  return "Download quality. In normal mode, applies to all queued items. In Advanced mode (Settings), set quality per item.";
+}
+
 function getSelectedQuality() {
   return $("quality-select")?.value || "HIGH";
+}
+
+/**
+ * Rebuild the <option> list of the main quality <select> to reflect the current
+ * experimental quality setting, and update its tooltip.
+ */
+function rebuildQualityPicker() {
+  const select = $("quality-select");
+  if (!select) return;
+
+  const current = select.value || getTrackQuality();
+  select.innerHTML = qualityOptions(current);
+
+  // Ensure selected value is still valid; fall back to saved or HIGH
+  const validOptions = visibleQualityOptions();
+  if (!validOptions.includes(select.value)) {
+    select.value = validOptions.includes(getTrackQuality()) ? getTrackQuality() : "HIGH";
+  }
+
+  // Update the tooltip title attribute
+  select.title = qualityPickerTip();
+
+  // Update the associated tip element if present
+  const tipEl = select.closest(".quality-picker-wrap")?.querySelector("[data-tip]");
+  if (tipEl) tipEl.dataset.tip = qualityPickerTip();
 }
 
 function syncQualityPicker() {
   const select = $("quality-select");
   if (!select) return;
+  rebuildQualityPicker();
   select.value = getTrackQuality();
 }
 
@@ -479,6 +540,7 @@ function initQualityPicker() {
   const select = $("quality-select");
   if (!select) return;
 
+  rebuildQualityPicker();
   select.value = getTrackQuality();
 
   select.addEventListener("change", () => {
@@ -486,7 +548,7 @@ function initQualityPicker() {
     setTrackQuality(q);
     const advanced = getAdvancedMode();
     if (advanced && downloadQueue.length > 0) {
-      if (confirm(`Apply "${QUALITY_LABELS[q]}" quality to all ${downloadQueue.length} item(s) in queue?`)) {
+      if (confirm(`Apply "${QUALITY_LABELS[q] || q}" quality to all ${downloadQueue.length} item(s) in queue?`)) {
         downloadQueue.forEach((item) => { item.quality = q; });
         renderQueue();
       }
@@ -527,9 +589,7 @@ function renderQueue() {
     const q = item.quality || getSelectedQuality();
     const qualityHtml = advanced
       ? `<select class="queue-item-quality-sel" data-idx="${idx}" data-quality="${escHtml(q)}" aria-label="Quality for this item">
-           ${["LOW","HIGH","LOSSLESS","HI_RES_LOSSLESS"].map(v =>
-             `<option value="${v}"${v === q ? " selected" : ""}>${escHtml(QUALITY_LABELS[v])}</option>`
-           ).join("")}
+           ${qualityOptions(q)}
          </select>`
       : `<span class="quality-pill-sm" data-quality="${escHtml(q)}">${escHtml(QUALITY_LABELS[q] || q)}</span>`;
 
@@ -2067,6 +2127,15 @@ export function init() {
   // Settings
   $("btn-save-settings")?.addEventListener("click", handleSaveSettings);
 
+  // Experimental quality mode: show/hide note immediately on checkbox toggle
+  const expQualityCb = $("setting-experimental-quality");
+  const expQualityNote = $("experimental-quality-note");
+  function syncExperimentalQualityNote() {
+    if (!expQualityNote) return;
+    expQualityNote.style.display = expQualityCb?.checked ? "" : "none";
+  }
+  expQualityCb?.addEventListener("change", syncExperimentalQualityNote);
+
   // Theme toggle
   $("theme-toggle")?.addEventListener("click", () => { cycleTheme(); updateThemeIcon(); });
 
@@ -2078,6 +2147,8 @@ export function init() {
   // Initial state
   updateAuthBadge();
   loadSettingsForm();
+  // Sync note after loadSettingsForm has set the checkbox value
+  syncExperimentalQualityNote();
 
   if (!isLoggedIn()) {
     activateTab("auth");

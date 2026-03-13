@@ -146,6 +146,12 @@ export function setM3uAllowed(v)         { setSetting("tiddl_m3u_allowed", JSON.
 export function getAdvancedMode()        { return getSetting("tiddl_advanced_mode", "false") === "true"; }
 export function setAdvancedMode(v)       { setSetting("tiddl_advanced_mode", v ? "true" : "false"); }
 
+// ─── Experimental: all-qualities mode ────────────────────────────────────────
+
+/** When enabled, every queue item is downloaded in all four quality tiers. */
+export function getAllQualitiesMode()   { return getSetting("tiddl_all_qualities", "false") === "true"; }
+export function setAllQualitiesMode(v) { setSetting("tiddl_all_qualities", v ? "true" : "false"); }
+
 /** Labels for all quality tiers. */
 export const QUALITY_LABELS = {
   LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",

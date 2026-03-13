@@ -103,6 +103,19 @@
         </button>
       </div>
 
+      <div id="all-qualities-banner" class="all-qualities-banner hidden">
+        <span class="all-qualities-banner-icon">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </span>
+        <span><strong>All Qualities Mode</strong> — each item downloads in every quality tier: Low, High, HiFi &amp; Max</span>
+        <span class="all-qualities-banner-pills">
+          <span class="quality-pill-sm" data-quality="LOW">Low</span>
+          <span class="quality-pill-sm" data-quality="HIGH">High</span>
+          <span class="quality-pill-sm" data-quality="LOSSLESS">HiFi</span>
+          <span class="quality-pill-sm" data-quality="HI_RES_LOSSLESS">Max</span>
+        </span>
+      </div>
+
       <div id="download-queue-section" class="download-queue-section hidden">
         <div class="download-queue-header">
           <span class="download-queue-title">
@@ -528,6 +541,25 @@
             </div>
           </div>
         </div>
+
+        <!-- Experimental -->
+        <details class="settings-section settings-advanced">
+          <summary class="settings-advanced-summary">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            Experimental
+            <span class="settings-advanced-badge">experimental</span>
+          </summary>
+          <p class="settings-advanced-note">
+            These features are experimental and may change behaviour. Use with caution.
+          </p>
+          <div class="checkbox-group">
+            <label class="checkbox-label" title="Download each queue item in every quality tier (Low, High, HiFi, Max). Files are named with the quality tier appended. Mutually exclusive with Advanced Mode."><input type="checkbox" id="setting-all-qualities" /><span>Download in all quality tiers</span><span class="tip" tabindex="0" data-tip="When enabled, every item in the queue is downloaded separately in Low, High, HiFi and Max quality. Output filenames include the quality tier label. The quality picker and Advanced Mode per-item selector are disabled while this is active.">?</span></label>
+          </div>
+          <div class="settings-note settings-note-warning" style="margin-top:var(--sp-3)">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>All Qualities Mode triggers <strong>four separate downloads per item</strong> — your browser may prompt for each one. It cannot be used alongside Advanced Mode.</span>
+          </div>
+        </details>
 
         <!-- Advanced -->
         <details class="settings-section settings-advanced">

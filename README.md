@@ -82,13 +82,50 @@ To use a different proxy, open **Settings** and update the **Proxy prefix URL** 
 
 ## Run locally
 
+### Prerequisites
+
+- **Git** — to clone the repository ([git-scm.com](https://git-scm.com))
+- A **static file server** — one of the options below (no build step required)
+
+### Start the server
+
+Clone the repo and serve the `web/` directory with any static file server:
+
+**Python 3** (no extra install needed on most systems):
 ```bash
 git clone https://github.com/19JVJeffery/tiddl-gui.git
 cd tiddl-gui
 python3 -m http.server 8080 --directory web
 ```
 
-Open <http://localhost:8080>. Any static file server works (`npx serve web`, `npx http-server web`, etc.).
+**Node.js** (`npx serve` — downloads and runs automatically):
+```bash
+git clone https://github.com/19JVJeffery/tiddl-gui.git
+cd tiddl-gui
+npx serve web -l 8080
+```
+
+**VS Code** — install the [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) extension, open the `web/` folder, and click **Go Live**.
+
+Open <http://localhost:8080> in your browser.
+
+### Stop the server
+
+Press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal where the server is running.
+
+### Uninstall / remove
+
+1. Stop the server (see above).
+2. Delete the cloned folder:
+   ```bash
+   # from the parent directory of tiddl-gui/
+   rm -rf tiddl-gui        # macOS / Linux
+   rmdir /s /q tiddl-gui   # Windows Command Prompt
+   ```
+3. If you used `npx serve`, no global package was installed — nothing else to remove.
+4. Clear the app's stored data (login tokens, settings) from your browser — choose one:
+   - In the app: open **Settings → Advanced / Developer → Clear all data** (removes all tokens and settings).
+   - Or via browser DevTools: **Application** → **Local Storage** → select `localhost` → **Clear All**.
 
 ## Credits
 

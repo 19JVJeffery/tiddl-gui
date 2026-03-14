@@ -739,10 +739,32 @@
 
           <div class="help-section" id="help-run-locally">
             <h3>Run locally</h3>
+            <p>No build step is required. Clone the repo and serve the <code>web/</code> folder with any static file server.</p>
+            <p><strong>Prerequisites:</strong> <a href="https://git-scm.com" target="_blank" rel="noopener">Git</a> and one of the server options below.</p>
+
+            <p><strong>Python 3</strong> (usually pre-installed on macOS &amp; Linux):</p>
             <pre class="help-code">git clone https://github.com/19JVJeffery/tiddl-gui.git
 cd tiddl-gui
 python3 -m http.server 8080 --directory web</pre>
-            <p>Then open <a href="http://localhost:8080" target="_blank">http://localhost:8080</a>. Any static file server works &mdash; <code>npx serve web</code>, Live Server, etc. No build step is required.</p>
+
+            <p><strong>Node.js</strong> (via <code>npx</code> &mdash; no global install needed):</p>
+            <pre class="help-code">git clone https://github.com/19JVJeffery/tiddl-gui.git
+cd tiddl-gui
+npx serve web -l 8080</pre>
+
+            <p><strong>VS Code</strong> &mdash; install the <a href="https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer" target="_blank" rel="noopener">Live Server</a> extension, open the <code>web/</code> folder, and click <strong>Go Live</strong>.</p>
+
+            <p>Open <a href="http://localhost:8080" target="_blank" rel="noopener">http://localhost:8080</a> in your browser.</p>
+
+            <p><strong>Stop the server:</strong> press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal.</p>
+
+            <p><strong>Uninstall / remove:</strong></p>
+            <ol>
+              <li>Stop the server.</li>
+              <li>Delete the cloned folder (<code>rm -rf tiddl-gui</code> on macOS/Linux, or <code>rmdir /s /q tiddl-gui</code> on Windows).</li>
+              <li>If you used <code>npx serve</code>, no global package was installed &mdash; nothing else to remove.</li>
+              <li>To clear stored login tokens and settings from your browser, open <strong>Settings &rarr; Advanced / Developer &rarr; Clear all data</strong> (removes all tokens and settings), or go to <strong>DevTools &rarr; Application &rarr; Local Storage &rarr; localhost &rarr; Clear All</strong>.</li>
+            </ol>
           </div>
 
         </div><!-- .help-body -->

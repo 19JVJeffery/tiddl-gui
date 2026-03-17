@@ -1864,17 +1864,17 @@ async function loadLibraryIfNeeded() {
     try {
       if (_librarySection === "tracks") {
         const items = await getAllUserFavoriteTracks();
-        _libraryData.tracks = items.map((i) => ({ ...(i.item || i), _dateAdded: i.dateAdded || "" }));
+        _libraryData.tracks = items.map((i) => ({ ...(i.item || i), _dateAdded: i.created || i.dateAdded || "" }));
       } else if (_librarySection === "albums") {
         const items = await getAllUserFavoriteAlbums();
-        _libraryData.albums = items.map((i) => ({ ...(i.item || i), _dateAdded: i.dateAdded || "" }));
+        _libraryData.albums = items.map((i) => ({ ...(i.item || i), _dateAdded: i.created || i.dateAdded || "" }));
       } else if (_librarySection === "playlists") {
         const [favItems, ownItems] = await Promise.all([
           getAllUserFavoritePlaylists().catch(() => []),
           getAllUserPlaylists().catch(() => []),
         ]);
-        const favMapped = favItems.map((i) => ({ ...(i.item || i), _dateAdded: i.dateAdded || "" }));
-        const ownMapped = ownItems.map((i) => ({ ...(i.item || i), _dateAdded: i.dateAdded || "" }));
+        const favMapped = favItems.map((i) => ({ ...(i.item || i), _dateAdded: i.created || i.dateAdded || "" }));
+        const ownMapped = ownItems.map((i) => ({ ...(i.item || i), _dateAdded: i.created || i.dateAdded || "" }));
         // Deduplicate by uuid
         const seen = new Set();
         _libraryData.playlists = [...ownMapped, ...favMapped].filter((p) => {

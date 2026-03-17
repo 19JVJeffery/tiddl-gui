@@ -6,7 +6,7 @@
  * tiddl/core/utils/download.py.
  */
 
-import { proxied, getMetadataCover, getCoverSize } from "./config.js";
+import { proxied, getMetadataEnable, getMetadataCover, getCoverSave, getCoverAllowed, getCoverSize } from "./config.js";
 import { getTrackStream, getVideoStream, getTrack, getAlbum, getAlbumItems, getPlaylist, getPlaylistItems, getMixItems, getArtistAlbums, getArtistSingles } from "./api.js";
 
 /** Delay (ms) before revoking an object URL after triggering a download. */
@@ -514,6 +514,271 @@ function embedCoverArt(data, extension, cover) {
   return data;
 }
 
+// ─── Metadata tag injection ────────────────────────────────────────────────
+
+/**
+ * Inject a VORBIS_COMMENT block into a FLAC file, replacing any existing one.
+ * Appends as the new last metadata block when no VORBIS_COMMENT is present.
+ *
+ * @param {Uint8Array} flacData  Raw FLAC bytes
+ * @param {Object}     tags      Plain-object of tag key→value strings
+ * @returns {Uint8Array} New FLAC bytes with tags embedded (or original on error)
+ */
+function injectFlacTags(flacData, tags) {
+  if (flacData[0] !== 0x66 || flacData[1] !== 0x4C ||
+      flacData[2] !== 0x61 || flacData[3] !== 0x43) {
+    return flacData;
+  }
+
+  const enc = new TextEncoder();
+  const vendorBytes = enc.encode("tiddl-web");
+
+  const comments = [];
+  if (tags.title)       comments.push(`TITLE=${tags.title}`);
+  if (tags.artist)      comments.push(`ARTIST=${tags.artist}`);
+  if (tags.albumTitle)  comments.push(`ALBUM=${tags.albumTitle}`);
+  if (tags.albumArtist) comments.push(`ALBUMARTIST=${tags.albumArtist}`);
+  if (tags.trackNumber) comments.push(`TRACKNUMBER=${tags.trackNumber}`);
+  if (tags.discNumber)  comments.push(`DISCNUMBER=${tags.discNumber}`);
+  if (tags.year)        comments.push(`DATE=${tags.year}`);
+  if (tags.isrc)        comments.push(`ISRC=${tags.isrc}`);
+  if (tags.copyright)   comments.push(`COPYRIGHT=${tags.copyright}`);
+
+  if (!comments.length) return flacData;
+
+  const commentBytes = comments.map(c => enc.encode(c));
+
+  let blockDataSize = 4 + vendorBytes.length + 4;
+  for (const cb of commentBytes) blockDataSize += 4 + cb.length;
+
+  const blockData = new Uint8Array(blockDataSize);
+  const dv = new DataView(blockData.buffer);
+  let off = 0;
+  dv.setUint32(off, vendorBytes.length, true); off += 4;
+  blockData.set(vendorBytes, off); off += vendorBytes.length;
+  dv.setUint32(off, commentBytes.length, true); off += 4;
+  for (const cb of commentBytes) {
+    dv.setUint32(off, cb.length, true); off += 4;
+    blockData.set(cb, off); off += cb.length;
+  }
+
+  // Walk existing metadata blocks looking for an existing VORBIS_COMMENT (type 4)
+  let pos = 4;
+  let vorbisStart = -1, vorbisBlockTotal = 0;
+  let lastBlockStart = 4;
+
+  while (pos + 4 <= flacData.length) {
+    const header = flacData[pos];
+    const blockType = header & 0x7F;
+    const blockLen = (flacData[pos + 1] << 16) | (flacData[pos + 2] << 8) | flacData[pos + 3];
+    if (blockType === 4) {
+      vorbisStart = pos;
+      vorbisBlockTotal = 4 + blockLen;
+    }
+    lastBlockStart = pos;
+    pos += 4 + blockLen;
+    if (header & 0x80) break;
+  }
+  const metadataEnd = pos;
+
+  if (vorbisStart >= 0) {
+    // Replace the existing VORBIS_COMMENT block
+    const originalIsLast = (flacData[vorbisStart] & 0x80) !== 0;
+    const newTotal = 4 + blockDataSize;
+    const delta = newTotal - vorbisBlockTotal;
+    const result = new Uint8Array(flacData.length + delta);
+    result.set(flacData.slice(0, vorbisStart));
+    result[vorbisStart] = (originalIsLast ? 0x80 : 0) | 4;
+    result[vorbisStart + 1] = (blockDataSize >> 16) & 0xFF;
+    result[vorbisStart + 2] = (blockDataSize >>  8) & 0xFF;
+    result[vorbisStart + 3] =  blockDataSize        & 0xFF;
+    result.set(blockData, vorbisStart + 4);
+    result.set(flacData.slice(vorbisStart + vorbisBlockTotal), vorbisStart + newTotal);
+    return result;
+  }
+
+  // Append a new VORBIS_COMMENT as the last metadata block, before audio data
+  const newBlock = new Uint8Array(4 + blockDataSize);
+  newBlock[0] = 0x80 | 4;                           // isLast=1, type=VORBIS_COMMENT
+  newBlock[1] = (blockDataSize >> 16) & 0xFF;
+  newBlock[2] = (blockDataSize >>  8) & 0xFF;
+  newBlock[3] =  blockDataSize        & 0xFF;
+  newBlock.set(blockData, 4);
+
+  const result = new Uint8Array(flacData.length + newBlock.length);
+  result.set(flacData.slice(0, metadataEnd));
+  result[lastBlockStart] = flacData[lastBlockStart] & 0x7F; // clear isLast on previous last block
+  result.set(newBlock, metadataEnd);
+  result.set(flacData.slice(metadataEnd), metadataEnd + newBlock.length);
+  return result;
+}
+
+/**
+ * Inject iTunes text atoms into the ilst container of an M4A file.
+ * Creates the full udta > meta > hdlr > ilst hierarchy when none is present,
+ * mirroring the approach used by injectM4aCover for new files.
+ *
+ * @param {Uint8Array} m4aData  Raw M4A bytes
+ * @param {Object}     tags     Plain-object of tag key→value strings
+ * @returns {Uint8Array} New M4A bytes with tags embedded (or original on error)
+ */
+function injectM4aTags(m4aData, tags) {
+  const enc = new TextEncoder();
+
+  // Build an iTunes text atom: fourCC [ data [ type=1 + locale=0 + UTF-8 text ] ]
+  function buildTextAtom(fourCC, text) {
+    if (!text) return null;
+    const textBytes = enc.encode(text);
+    const dataSize = 8 + 4 + 4 + textBytes.length;
+    const totalSize = 8 + dataSize;
+    const atom = new Uint8Array(totalSize);
+    const dv2 = new DataView(atom.buffer);
+    let o = 0;
+    dv2.setUint32(o, totalSize, false); o += 4;
+    atom.set(fourCC, o); o += 4;
+    dv2.setUint32(o, dataSize, false); o += 4;
+    atom.set([0x64, 0x61, 0x74, 0x61], o); o += 4; // "data"
+    dv2.setUint32(o, 0x00000001, false); o += 4;    // type = UTF-8
+    dv2.setUint32(o, 0, false); o += 4;             // locale = 0
+    atom.set(textBytes, o);
+    return atom;
+  }
+
+  // Build an iTunes integer atom for track/disc number:
+  // fourCC [ data [ type=0 (implicit) + locale=0 + 8 bytes:
+  //   0x0000 | num (uint16 BE) | total (uint16 BE) | 0x0000 ] ]
+  function buildIntAtom(fourCC, num, total = 0) {
+    const dataSize = 8 + 4 + 4 + 8; // 24 bytes
+    const totalSize = 8 + dataSize;  // 32 bytes
+    const atom = new Uint8Array(totalSize);
+    const dv2 = new DataView(atom.buffer);
+    let o = 0;
+    dv2.setUint32(o, totalSize, false); o += 4;
+    atom.set(fourCC, o); o += 4;
+    dv2.setUint32(o, dataSize, false); o += 4;
+    atom.set([0x64, 0x61, 0x74, 0x61], o); o += 4; // "data"
+    dv2.setUint32(o, 0x00000000, false); o += 4;    // type = implicit integer
+    dv2.setUint32(o, 0, false); o += 4;             // locale = 0
+    dv2.setUint16(o, 0, false); o += 2;             // padding
+    dv2.setUint16(o, num, false); o += 2;           // track/disc number
+    dv2.setUint16(o, total, false); o += 2;         // total (0 = unknown)
+    dv2.setUint16(o, 0, false);                     // padding
+    return atom;
+  }
+
+  const builtAtoms = [
+    buildTextAtom([0xA9, 0x6E, 0x61, 0x6D], tags.title),       // ©nam
+    buildTextAtom([0xA9, 0x41, 0x52, 0x54], tags.artist),       // ©ART
+    buildTextAtom([0xA9, 0x61, 0x6C, 0x62], tags.albumTitle),   // ©alb
+    buildTextAtom([0x61, 0x41, 0x52, 0x54], tags.albumArtist),  // aART
+    buildTextAtom([0xA9, 0x64, 0x61, 0x79], tags.year),         // ©day
+    buildTextAtom([0x63, 0x70, 0x72, 0x74], tags.copyright),    // cprt
+    tags.trackNumber ? buildIntAtom([0x74, 0x72, 0x6B, 0x6E], tags.trackNumber) : null, // trkn
+    tags.discNumber  ? buildIntAtom([0x64, 0x69, 0x73, 0x6B], tags.discNumber)  : null, // disk
+  ].filter(Boolean);
+  if (!builtAtoms.length) return m4aData;
+
+  const totalAtomsSize = builtAtoms.reduce((s, a) => s + a.length, 0);
+  const combinedAtoms = new Uint8Array(totalAtomsSize);
+  let wPos = 0;
+  for (const a of builtAtoms) { combinedAtoms.set(a, wPos); wPos += a.length; }
+
+  const moov = _findBox(m4aData, "moov", 0, m4aData.length);
+  if (!moov) return m4aData;
+
+  // Locate ilst via the same three paths used by injectM4aCover
+  let ilst = null;
+  let ancestors = [];
+
+  const udta = _findBox(m4aData, "udta", moov.start + 8, moov.start + moov.size);
+  if (udta) {
+    const metaU = _findBox(m4aData, "meta", udta.start + 8, udta.start + udta.size);
+    if (metaU) {
+      const il = _findBox(m4aData, "ilst", metaU.start + 12, metaU.start + metaU.size);
+      if (il) { ilst = il; ancestors = [metaU, udta, moov]; }
+    }
+  }
+  if (!ilst) {
+    const metaM = _findBox(m4aData, "meta", moov.start + 8, moov.start + moov.size);
+    if (metaM) {
+      const il = _findBox(m4aData, "ilst", metaM.start + 12, metaM.start + metaM.size);
+      if (il) { ilst = il; ancestors = [metaM, moov]; }
+    }
+  }
+  if (!ilst) {
+    const il = _findBox(m4aData, "ilst", moov.start + 8, moov.start + moov.size);
+    if (il) { ilst = il; ancestors = [moov]; }
+  }
+
+  if (ilst) {
+    // Append new tag atoms at the end of the existing ilst
+    const insertPos = ilst.start + ilst.size;
+    const delta = totalAtomsSize;
+    const result = new Uint8Array(m4aData.length + delta);
+    result.set(m4aData.slice(0, insertPos));
+    result.set(combinedAtoms, insertPos);
+    result.set(m4aData.slice(insertPos), insertPos + delta);
+
+    _writeU32BE(result, ilst.start, _readU32BE(result, ilst.start) + delta);
+    for (const anc of ancestors) {
+      _writeU32BE(result, anc.start, _readU32BE(result, anc.start) + delta);
+    }
+    _shiftChunkOffsets(result, moov.start + 8, moov.start + moov.size + delta,
+                       insertPos, delta);
+    return result;
+  }
+
+  // No ilst found — build udta > meta (FullBox) > hdlr > ilst from scratch
+  const ilstSize = 8 + totalAtomsSize;
+  const ilstAtom = new Uint8Array(ilstSize);
+  new DataView(ilstAtom.buffer).setUint32(0, ilstSize, false);
+  ilstAtom.set([0x69, 0x6C, 0x73, 0x74], 4); // "ilst"
+  ilstAtom.set(combinedAtoms, 8);
+
+  const hdlrSize = 4 + 4 + 4 + 4 + 4 + 12 + 1;
+  const hdlrAtom = new Uint8Array(hdlrSize);
+  new DataView(hdlrAtom.buffer).setUint32(0, hdlrSize, false);
+  hdlrAtom.set([0x68, 0x64, 0x6C, 0x72], 4);  // "hdlr"
+  hdlrAtom.set([0x6D, 0x64, 0x69, 0x72], 16); // handler_type = "mdir"
+
+  const metaSize = 12 + hdlrSize + ilstSize;
+  const metaAtom = new Uint8Array(metaSize);
+  new DataView(metaAtom.buffer).setUint32(0, metaSize, false);
+  metaAtom.set([0x6D, 0x65, 0x74, 0x61], 4); // "meta"
+  metaAtom.set(hdlrAtom, 12);
+  metaAtom.set(ilstAtom, 12 + hdlrSize);
+
+  const udtaSize = 8 + metaSize;
+  const udtaAtom = new Uint8Array(udtaSize);
+  new DataView(udtaAtom.buffer).setUint32(0, udtaSize, false);
+  udtaAtom.set([0x75, 0x64, 0x74, 0x61], 4); // "udta"
+  udtaAtom.set(metaAtom, 8);
+
+  const insertPos = moov.start + moov.size;
+  const result = new Uint8Array(m4aData.length + udtaSize);
+  result.set(m4aData.slice(0, insertPos));
+  result.set(udtaAtom, insertPos);
+  result.set(m4aData.slice(insertPos), insertPos + udtaSize);
+
+  _writeU32BE(result, moov.start, moov.size + udtaSize);
+  _shiftChunkOffsets(result, moov.start + 8, moov.start + moov.size + udtaSize,
+                     insertPos, udtaSize);
+  return result;
+}
+
+/**
+ * Embed track metadata tags into audio data.
+ * @param {Uint8Array} data       Raw audio bytes
+ * @param {string}     extension  ".flac" or ".m4a"
+ * @param {Object}     tags       Plain-object of tag key→value
+ * @returns {Uint8Array}
+ */
+function embedMetadata(data, extension, tags) {
+  if (extension === ".flac") return injectFlacTags(data, tags);
+  if (extension === ".m4a")  return injectM4aTags(data, tags);
+  return data;
+}
+
 // ─── ZIP timestamp helpers ─────────────────────────────────────────────────
 
 /**
@@ -649,14 +914,24 @@ function buildZip(files) {
  * save.  Used internally by downloadTrack and the multi-track ZIP bundlers.
  *
  * @returns {{ data: Uint8Array, extension: string, title: string,
- *             artist: string, trackNumber: number, coverHash: string|null }}
+ *             artist: string, trackNumber: number, discNumber: number,
+ *             albumTitle: string, albumArtist: string, year: string,
+ *             isrc: string, copyright: string, coverHash: string|null }}
  */
 async function fetchTrackData(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
   const track = await getTrack(trackId);
-  const title = sanitize((track.version ? `${track.title} (${track.version})` : track.title) || String(trackId));
-  const artist = sanitize(track.artist?.name || "Unknown Artist");
+  const rawTitle = (track.version ? `${track.title} (${track.version})` : track.title) || String(trackId);
+  const title = sanitize(rawTitle);
+  const rawArtist = track.artist?.name || "Unknown Artist";
+  const artist = sanitize(rawArtist);
   const trackNumber = track.trackNumber || 0;
+  const discNumber = track.volumeNumber || 1;
+  const albumTitle = track.album?.title || "";
+  const albumArtist = track.album?.artist?.name || rawArtist;
+  const year = (track.streamStartDate || track.album?.releaseDate || "").slice(0, 4);
+  const isrc = track.isrc || "";
+  const copyright = track.copyright || "";
   const coverHash = track.album?.cover || null;
 
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
@@ -674,7 +949,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
     onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
   );
 
-  return { data, extension, title, artist, trackNumber, coverHash };
+  return { data, extension, title, artist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash };
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────
@@ -688,12 +963,24 @@ async function fetchTrackData(trackId, quality, onProgress) {
  */
 export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameSuffix = "") {
   try {
-    let { data, extension, title, artist, coverHash } = await fetchTrackData(trackId, quality, onProgress);
-    if (getMetadataCover() && coverHash) {
+    let { data, extension, title, artist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash } = await fetchTrackData(trackId, quality, onProgress);
+
+    if (getMetadataEnable()) {
+      data = embedMetadata(data, extension, { title, artist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright });
+    }
+
+    const needCover = (getMetadataCover() || (getCoverSave() && getCoverAllowed().includes("track"))) && coverHash;
+    if (needCover) {
       onProgress?.(0, 1, "Fetching cover art…");
       const cover = await fetchCoverArt(coverHash, getCoverSize());
-      if (cover) data = embedCoverArt(data, extension, cover);
+      if (cover) {
+        if (getMetadataCover()) data = embedCoverArt(data, extension, cover);
+        if (getCoverSave() && getCoverAllowed().includes("track")) {
+          triggerDownload(cover, "cover.jpg", "image/jpeg");
+        }
+      }
     }
+
     const filename = `${artist} - ${title}${nameSuffix}${extension}`;
     triggerDownload(data, filename, extToMime(extension));
     return { filename, success: true };
@@ -716,11 +1003,13 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
 
     const albumTitle  = sanitize(albumMeta.title || "Unknown Album");
     const albumArtist = sanitize(albumMeta.artist?.name || "Unknown Artist");
+    const albumYear   = (albumMeta.releaseDate || "").slice(0, 4);
     const folder = `${albumArtist} - ${albumTitle}`;
 
     // Fetch album cover once for all tracks (best-effort)
+    const needCover = (getMetadataCover() || (getCoverSave() && getCoverAllowed().includes("album"))) && albumMeta.cover;
     let albumCover = null;
-    if (getMetadataCover() && albumMeta.cover) {
+    if (needCover) {
       onProgress?.(0, 1, "Fetching cover art…");
       albumCover = await fetchCoverArt(albumMeta.cover, getCoverSize());
     }
@@ -739,7 +1028,16 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
           onSubItemProgress?.(i, items.length, track.title, d, t, "active");
         });
         let trackData = td.data;
-        if (albumCover) trackData = embedCoverArt(td.data, td.extension, albumCover);
+        if (getMetadataEnable()) {
+          trackData = embedMetadata(trackData, td.extension, {
+            title: td.title, artist: td.artist,
+            albumTitle: td.albumTitle || albumTitle,
+            albumArtist: td.albumArtist || albumArtist,
+            trackNumber: td.trackNumber, discNumber: td.discNumber,
+            year: td.year || albumYear, isrc: td.isrc, copyright: td.copyright,
+          });
+        }
+        if (albumCover && getMetadataCover()) trackData = embedCoverArt(trackData, td.extension, albumCover);
         const num = String(td.trackNumber || (i + 1)).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
         zipFiles.push({ name: fname, data: trackData });
@@ -749,6 +1047,10 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
         results.push({ filename: track.title || String(track.id), success: false, error: err.message });
         onSubItemProgress?.(i, items.length, track.title, 0, 1, "failed");
       }
+    }
+
+    if (albumCover && getCoverSave() && getCoverAllowed().includes("album")) {
+      zipFiles.push({ name: `${folder}/cover.jpg`, data: albumCover });
     }
 
     if (zipFiles.length > 0) {
@@ -778,6 +1080,14 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
     const playlistTitle = sanitize(playlistMeta.title || "Playlist");
     const folder = playlistTitle;
 
+    // Fetch playlist cover once (best-effort) for cover-save feature.
+    // Playlist cover images on Tidal max out at 1080px (per the settings UI label).
+    let playlistCover = null;
+    if (getCoverSave() && getCoverAllowed().includes("playlist") && playlistMeta.squareImage) {
+      onProgress?.(0, 1, "Fetching playlist cover art…");
+      playlistCover = await fetchCoverArt(playlistMeta.squareImage, Math.min(getCoverSize(), 1080));
+    }
+
     const items = (itemsData.items || []).filter((i) => i.type === "track");
     const zipFiles = [];
     const results = [];
@@ -794,13 +1104,21 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
           onSubItemProgress?.(i, items.length, track.title, d, t, "active");
         });
         let trackData = td.data;
+        if (getMetadataEnable()) {
+          trackData = embedMetadata(trackData, td.extension, {
+            title: td.title, artist: td.artist,
+            albumTitle: td.albumTitle, albumArtist: td.albumArtist,
+            trackNumber: td.trackNumber, discNumber: td.discNumber,
+            year: td.year, isrc: td.isrc, copyright: td.copyright,
+          });
+        }
         if (getMetadataCover() && td.coverHash) {
           if (!coverCache.has(td.coverHash)) {
             const fetched = await fetchCoverArt(td.coverHash, getCoverSize());
             if (fetched) coverCache.set(td.coverHash, fetched);
           }
           const cover = coverCache.get(td.coverHash);
-          if (cover) trackData = embedCoverArt(td.data, td.extension, cover);
+          if (cover) trackData = embedCoverArt(trackData, td.extension, cover);
         }
         const num = String(i + 1).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;
@@ -811,6 +1129,10 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
         results.push({ filename: track.title || String(track.id), success: false, error: err.message });
         onSubItemProgress?.(i, items.length, track.title, 0, 1, "failed");
       }
+    }
+
+    if (playlistCover && getCoverSave() && getCoverAllowed().includes("playlist")) {
+      zipFiles.push({ name: `${folder}/cover.jpg`, data: playlistCover });
     }
 
     if (zipFiles.length > 0) {
@@ -850,13 +1172,21 @@ export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItem
           onSubItemProgress?.(i, items.length, track.title, d, t, "active");
         });
         let trackData = td.data;
+        if (getMetadataEnable()) {
+          trackData = embedMetadata(trackData, td.extension, {
+            title: td.title, artist: td.artist,
+            albumTitle: td.albumTitle, albumArtist: td.albumArtist,
+            trackNumber: td.trackNumber, discNumber: td.discNumber,
+            year: td.year, isrc: td.isrc, copyright: td.copyright,
+          });
+        }
         if (getMetadataCover() && td.coverHash) {
           if (!coverCache.has(td.coverHash)) {
             const fetched = await fetchCoverArt(td.coverHash, getCoverSize());
             if (fetched) coverCache.set(td.coverHash, fetched);
           }
           const cover = coverCache.get(td.coverHash);
-          if (cover) trackData = embedCoverArt(td.data, td.extension, cover);
+          if (cover) trackData = embedCoverArt(trackData, td.extension, cover);
         }
         const num = String(i + 1).padStart(2, "0");
         const fname = `${folder}/${num}. ${td.artist} - ${td.title}${td.extension}`;

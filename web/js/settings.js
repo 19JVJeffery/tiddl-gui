@@ -31,6 +31,7 @@ import {
   getM3uAllowed, setM3uAllowed,
   getAdvancedMode, setAdvancedMode,
   getAllQualitiesMode, setAllQualitiesMode,
+  getPreferredFormat, setPreferredFormat,
   QUALITY_LABELS, QUALITY_STANDARD,
   getTemplate, setTemplate,
   TEMPLATE_DEFAULTS,
@@ -424,6 +425,7 @@ export function loadSettingsForm() {
 
   // Rebuild the track quality dropdown first (adds/removes experimental options)
   rebuildSettingsTrackQualityDropdown();
+  setVal("setting-preferred-format",  getPreferredFormat());
   setVal("setting-track-quality",    getTrackQuality());
   setVal("setting-video-quality",    getVideoQuality());
   setVal("setting-threads",          getThreadsCount());
@@ -501,6 +503,7 @@ export function saveSettingsForm(appendLog) {
   if (csec) localStorage.setItem("tiddl_client_secret", csec);
   else       localStorage.removeItem("tiddl_client_secret");
 
+  setPreferredFormat(getVal("setting-preferred-format"));
   setTrackQuality(getVal("setting-track-quality"));
   setVideoQuality(getVal("setting-video-quality"));
   setThreadsCount(parseInt(getVal("setting-threads") || "4", 10));

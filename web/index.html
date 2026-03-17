@@ -417,6 +417,13 @@
           </h3>
           <div class="settings-grid">
             <div class="field-group">
+              <label class="field-label" for="setting-preferred-format">Preferred Format <span class="tip" tabindex="0" data-tip="Choose your preferred audio container format. M4A uses AAC encoding (Low / High quality tiers). FLAC automatically upgrades Low and High quality to HiFi (16-bit lossless) so downloads always use FLAC. Choosing FLAC requires a Tidal HiFi or HiFi Plus subscription.">?</span></label>
+              <select id="setting-preferred-format" title="M4A=AAC encoding (Low/High quality) · FLAC=lossless; upgrades Low/High to HiFi automatically">
+                <option value="m4a">M4A &mdash; AAC (Low / High quality)</option>
+                <option value="flac">FLAC &mdash; lossless (upgrades to HiFi or above)</option>
+              </select>
+            </div>
+            <div class="field-group">
               <label class="field-label" for="setting-track-quality">Default Track Quality <span class="tip" tabindex="0" data-tip="Audio quality for downloaded tracks. Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi or HiFi Plus Tidal subscription.">?</span></label>
               <select id="setting-track-quality" title="Low=96 kbps M4A · High=320 kbps M4A · HiFi=16-bit FLAC · Max=up to 24-bit FLAC. Higher tiers require a HiFi or HiFi Plus Tidal subscription.">
                 <option value="LOW">Low &mdash; 96 kbps .m4a</option>

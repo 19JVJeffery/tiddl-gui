@@ -27,6 +27,7 @@ import {
 } from "./download.js";
 import {
   getTheme, getAccentColor, getTrackQuality, setTrackQuality, getAdvancedMode, getAllQualitiesMode,
+  getPreferredFormat,
   QUALITY_LABELS, QUALITY_DESCRIPTIONS, QUALITY_STANDARD,
   loadSearchHistory, saveToSearchHistory, clearSearchHistory,
 } from "./config.js";
@@ -883,9 +884,15 @@ async function handleDownload() {
   for (let qi = 0; qi < items.length; qi++) {
     const item         = items[qi];
     const requestedQuality = advanced ? (item.quality || globalQuality) : globalQuality;
+    // When FLAC is the preferred format, upgrade M4A quality tiers (LOW/HIGH) to LOSSLESS
+    // so the download always produces a lossless file.
+    const preferFlac = getPreferredFormat() === "flac";
+    const formatQuality = preferFlac && (requestedQuality === "LOW" || requestedQuality === "HIGH")
+      ? "LOSSLESS"
+      : requestedQuality;
     // Cap to the item's known max quality (fallback for multi-item queues where
     // individual items may not support the selected tier).
-    const quality      = effectiveDownloadQuality(item, requestedQuality);
+    const quality      = effectiveDownloadQuality(item, formatQuality);
     const qStatusEl    = $(`queue-status-${qi}`);
     const queueItemEl  = $("download-queue")?.querySelector(`.queue-item[data-idx="${qi}"]`);
     const itemRowEl    = $(`dl-item-row-${qi}`);

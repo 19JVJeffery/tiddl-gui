@@ -152,6 +152,16 @@ export function setAdvancedMode(v)       { setSetting("tiddl_advanced_mode", v ?
 export function getAllQualitiesMode()   { return getSetting("tiddl_all_qualities", "false") === "true"; }
 export function setAllQualitiesMode(v) { setSetting("tiddl_all_qualities", v ? "true" : "false"); }
 
+// ─── Preferred format ─────────────────────────────────────────────────────────
+
+/**
+ * "m4a" — use the quality tier as-is (LOW/HIGH produce AAC/M4A).
+ * "flac" — automatically upgrade LOW/HIGH quality to LOSSLESS so downloads
+ *           are always in FLAC format.
+ */
+export function getPreferredFormat()   { return getSetting("tiddl_preferred_format", "m4a"); }
+export function setPreferredFormat(v)  { setSetting("tiddl_preferred_format", v); }
+
 /** Labels for all quality tiers. */
 export const QUALITY_LABELS = {
   LOW: "Low", HIGH: "High", LOSSLESS: "HiFi", HI_RES_LOSSLESS: "Max",

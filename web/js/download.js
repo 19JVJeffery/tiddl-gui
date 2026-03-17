@@ -39,9 +39,6 @@ function parseDashManifest(manifest) {
 
   const NS = "urn:mpeg:dash:schema:mpd:2011";
 
-  const repr = doc.getElementsByTagNameNS(NS, "Representation")[0];
-  const codecs = repr?.getAttribute("codecs") || "";
-
   const segTpl = doc.getElementsByTagNameNS(NS, "SegmentTemplate")[0];
   const urlTemplate = segTpl?.getAttribute("media") || "";
 
@@ -60,8 +57,9 @@ function parseDashManifest(manifest) {
     urls.push(urlTemplate.replace("$Number$", String(i)));
   }
 
-  const extension = codecs.includes("flac") ? ".flac" : ".m4a";
-  return { urls, extension, encryptionType: "NONE" };
+  // MPEG-DASH always delivers segments in ISO BMFF (fMP4) containers,
+  // regardless of the audio codec. Use .m4a for all DASH streams.
+  return { urls, extension: ".m4a", encryptionType: "NONE" };
 }
 
 function parseStreamManifest(streamInfo) {
@@ -240,19 +238,43 @@ function injectFlacCover(flacData, jpegBytes) {
   pv.setUint32(off, jpegBytes.length, false); off += 4;     // data length
   pictureData.set(jpegBytes, off);
 
-  // Walk the metadata-block chain to find the last block
+  // Walk the metadata-block chain to locate any existing PICTURE block and
+  // the overall last metadata block.
   let pos = 4;
   let lastBlockStart = 4;
+  let pictureStart = -1;
+  let pictureBlockTotal = 0;
   while (pos + 4 <= flacData.length) {
     lastBlockStart = pos;
     const header = flacData[pos];
+    const blockType = header & 0x7F;
     const blockLen = (flacData[pos + 1] << 16) | (flacData[pos + 2] << 8) | flacData[pos + 3];
+    if (blockType === 6 && pictureStart < 0) { // type 6 = PICTURE
+      pictureStart = pos;
+      pictureBlockTotal = 4 + blockLen;
+    }
     pos += 4 + blockLen;
     if (header & 0x80) break; // isLast
   }
   const metadataEnd = pos; // start of audio data
 
-  // Assemble new file: metadata (last flag cleared) + PICTURE block + audio
+  if (pictureStart >= 0) {
+    // Replace existing PICTURE block in-place (size may change)
+    const originalIsLast = (flacData[pictureStart] & 0x80) !== 0;
+    const newTotal = 4 + pictureDataSize;
+    const delta = newTotal - pictureBlockTotal;
+    const result = new Uint8Array(flacData.length + delta);
+    result.set(flacData.slice(0, pictureStart));
+    result[pictureStart]     = (originalIsLast ? 0x80 : 0) | 6;
+    result[pictureStart + 1] = (pictureDataSize >> 16) & 0xFF;
+    result[pictureStart + 2] = (pictureDataSize >>  8) & 0xFF;
+    result[pictureStart + 3] =  pictureDataSize        & 0xFF;
+    result.set(pictureData, pictureStart + 4);
+    result.set(flacData.slice(pictureStart + pictureBlockTotal), pictureStart + newTotal);
+    return result;
+  }
+
+  // No existing PICTURE — append as the new last block before audio data
   const result = new Uint8Array(flacData.length + 4 + pictureDataSize);
   result.set(flacData.slice(0, metadataEnd));
   result[lastBlockStart] = flacData[lastBlockStart] & 0x7F; // clear "last" flag
@@ -949,7 +971,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
     onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
   );
 
-  return { data, extension, title, artist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash };
+  return { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash };
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────
@@ -963,10 +985,10 @@ async function fetchTrackData(trackId, quality, onProgress) {
  */
 export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameSuffix = "") {
   try {
-    let { data, extension, title, artist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash } = await fetchTrackData(trackId, quality, onProgress);
+    let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash } = await fetchTrackData(trackId, quality, onProgress);
 
     if (getMetadataEnable()) {
-      data = embedMetadata(data, extension, { title, artist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright });
+      data = embedMetadata(data, extension, { title: rawTitle, artist: rawArtist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright });
     }
 
     const needCover = (getMetadataCover() || (getCoverSave() && getCoverAllowed().includes("track"))) && coverHash;
@@ -1001,8 +1023,10 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
       getAlbumItems(albumId, 100, 0),
     ]);
 
-    const albumTitle  = sanitize(albumMeta.title || "Unknown Album");
-    const albumArtist = sanitize(albumMeta.artist?.name || "Unknown Artist");
+    const rawAlbumTitle  = albumMeta.title || "Unknown Album";
+    const rawAlbumArtist = albumMeta.artist?.name || "Unknown Artist";
+    const albumTitle  = sanitize(rawAlbumTitle);
+    const albumArtist = sanitize(rawAlbumArtist);
     const albumYear   = (albumMeta.releaseDate || "").slice(0, 4);
     const folder = `${albumArtist} - ${albumTitle}`;
 
@@ -1030,9 +1054,9 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
         let trackData = td.data;
         if (getMetadataEnable()) {
           trackData = embedMetadata(trackData, td.extension, {
-            title: td.title, artist: td.artist,
-            albumTitle: td.albumTitle || albumTitle,
-            albumArtist: td.albumArtist || albumArtist,
+            title: td.rawTitle, artist: td.rawArtist,
+            albumTitle: td.albumTitle || rawAlbumTitle,
+            albumArtist: td.albumArtist || rawAlbumArtist,
             trackNumber: td.trackNumber, discNumber: td.discNumber,
             year: td.year || albumYear, isrc: td.isrc, copyright: td.copyright,
           });
@@ -1106,7 +1130,7 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
         let trackData = td.data;
         if (getMetadataEnable()) {
           trackData = embedMetadata(trackData, td.extension, {
-            title: td.title, artist: td.artist,
+            title: td.rawTitle, artist: td.rawArtist,
             albumTitle: td.albumTitle, albumArtist: td.albumArtist,
             trackNumber: td.trackNumber, discNumber: td.discNumber,
             year: td.year, isrc: td.isrc, copyright: td.copyright,
@@ -1174,7 +1198,7 @@ export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItem
         let trackData = td.data;
         if (getMetadataEnable()) {
           trackData = embedMetadata(trackData, td.extension, {
-            title: td.title, artist: td.artist,
+            title: td.rawTitle, artist: td.rawArtist,
             albumTitle: td.albumTitle, albumArtist: td.albumArtist,
             trackNumber: td.trackNumber, discNumber: td.discNumber,
             year: td.year, isrc: td.isrc, copyright: td.copyright,

@@ -1,5 +1,39 @@
 <div align="center">
 
+<!-- Animated UI Banner (SVG-based, GitHub-safe) -->
+<img src="https://svg-banners.vercel.app/api?type=origin&text1=tiddl-gui%20Interface&width=900&height=300&fontSize=42&theme=dark&fontColor=%23814793" width="90%" />
+
+<br><br>
+
+<!-- Fake animated panels -->
+<img src="https://readme-typing-svg.demolab.com?font=Inter&size=20&duration=2000&pause=500&color=814793&center=true&vCenter=true&width=700&lines=Login+with+Tidal...;Browse+tracks%2C+albums%2C+playlists...;Download+in+FLAC+%2F+Hi-Res...;All+in+your+browser..." />
+
+<br><br>
+
+<!-- UI preview illusion -->
+<table>
+<tr>
+<td align="center">
+<img src="docs/screenshots/all-devices-black.png" width="300"/>
+<br><sub><b style="color:#814793;">Multi-device UI</b></sub>
+</td>
+
+<td align="center">
+<img src="docs/screenshots/download-tab.png" width="300"/>
+<br><sub><b style="color:#814793;">Download Panel</b></sub>
+</td>
+
+<td align="center">
+<img src="docs/screenshots/search-tab.png" width="300"/>
+<br><sub><b style="color:#814793;">Search Experience</b></sub>
+</td>
+</tr>
+</table>
+
+</div>
+
+<div align="center">
+
 <!-- Gradient Title (GitHub-safe SVG trick) -->
 <img src="https://readme-typing-svg.demolab.com?font=Inter&size=38&duration=1&pause=999999&color=814793&center=true&vCenter=true&width=500&lines=tiddl-gui" />
 

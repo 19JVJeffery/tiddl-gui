@@ -1,18 +1,18 @@
 <div align="center">
 
-# ✨ tiddl-gui
+# ✨ <span style="color:#814793;">tiddl-gui</span>
 
-**Download Tidal tracks, albums, and playlists at maximum quality — directly in your browser.**
-
-<br>
-
-[![Live App](https://img.shields.io/badge/🚀%20Live%20App-Open%20Now-4fd08c?style=for-the-badge)](https://19jvjeffery.github.io/tiddl-gui/web/index.html)
-[![License](https://img.shields.io/badge/📄%20License-Apache%202.0-blue?style=for-the-badge)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/19JVJeffery/tiddl-gui?style=for-the-badge&color=yellow)](https://github.com/19JVJeffery/tiddl-gui/stargazers)
+**<span style="color:#814793;">Download Tidal tracks, albums, and playlists at maximum quality — directly in your browser.</span>**
 
 <br>
 
-_No installation required — just open and go._
+[![Live App](https://img.shields.io/badge/🚀%20Live%20App-Open%20Now-814793?style=for-the-badge&logoColor=white)](https://19jvjeffery.github.io/tiddl-gui/web/index.html)
+[![License](https://img.shields.io/badge/📄%20License-Apache%202.0-814793?style=for-the-badge)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/19JVJeffery/tiddl-gui?style=for-the-badge&color=814793)](https://github.com/19JVJeffery/tiddl-gui/stargazers)
+
+<br>
+
+<span style="color:#999;">No installation required — just open and go.</span>
 
 <br>
 
@@ -22,7 +22,7 @@ _No installation required — just open and go._
 
 ---
 
-## ⚠️ Disclaimer
+## ⚠️ <span style="color:#814793;">Disclaimer</span>
 
 > [!WARNING]  
 > This project is **not affiliated with Tidal**.  
@@ -38,7 +38,7 @@ _No installation required — just open and go._
 
 ---
 
-## 🚀 Features
+## 🚀 <span style="color:#814793;">Features</span>
 
 - 🎧 Download **tracks, albums, playlists, and mixes**
 - 💿 Supports **FLAC lossless + high-resolution audio**
@@ -48,22 +48,19 @@ _No installation required — just open and go._
 
 ---
 
-## 🧭 How to Use
+## 🧭 <span style="color:#814793;">How to Use</span>
 
-### 1. 🔐 Log In
+### 1. 🔐 <span style="color:#814793;">Log In</span>
 - Go to **Account**
 - Click **Login with Tidal**
 - Authorise in the new tab
 - Return — login completes automatically
 
-**Notes:**
-- Token stored locally (`localStorage`)
-- Auto-refresh handled client-side
-- No third-party servers involved
+<span style="color:#999;">Token stored locally (`localStorage`) and refreshed automatically.</span>
 
 ---
 
-### 2. ⬇️ Download Content
+### 2. ⬇️ <span style="color:#814793;">Download Content</span>
 
 Paste any supported input:
 
@@ -75,11 +72,11 @@ Paste any supported input:
 | Playlist | `playlist/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | Mix | `mix/0123456789abcdef` |
 
-Select quality → click **Download**
+<span style="color:#814793;"><strong>Select quality → Click Download</strong></span>
 
 ---
 
-### 🎚️ Quality Options
+### 🎚️ <span style="color:#814793;">Quality Options</span>
 
 | Quality | Format | Details |
 |:--|:--|:--|
@@ -94,54 +91,25 @@ Select quality → click **Download**
 
 ---
 
-### 3. 🔎 Search
+### 3. 🔎 <span style="color:#814793;">Search</span>
 
-- Open **Search**
 - Enter artist / track / album / playlist
 - Click results to:
-  - ➕ Add to queue
-  - 📂 Browse contents
-  - ⬇️ Download individually or all
+  - ➕ Add to queue  
+  - 📂 Browse contents  
+  - ⬇️ Download individually or all  
 
 ---
 
-### 4. 📚 Library
+### 4. 📚 <span style="color:#814793;">Library</span>
 
-Access your saved:
-- Tracks
-- Albums
-- Playlists
-
-_(Requires login)_
+Browse your saved:
+- Tracks  
+- Albums  
+- Playlists  
 
 ---
 
-### 5. 🌐 CORS Proxy
+### 5. 🌐 <span style="color:#814793;">CORS Proxy</span>
 
-Tidal blocks direct browser requests.
-
-Default proxy:
-- https://corsproxy.io (no setup needed)
-
-To change:
-- Open **Settings**
-- Edit **Proxy prefix URL**
-
----
-
-## 🛠️ Run Locally
-
-### Requirements
-
-- Git  
-- Any static file server  
-
----
-
-### ▶️ Start Server
-
-#### Python (quickest)
-```bash
-git clone https://github.com/19JVJeffery/tiddl-gui.git
-cd tiddl-gui
-python3 -m http.server 8080 --directory web
+Default:

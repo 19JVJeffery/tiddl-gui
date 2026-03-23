@@ -11,7 +11,7 @@
 No installation needed — open the link and go.
 
 
-<img src="docs/screenshots/all-devices-black.png" alt="Mockups" width="50%" /></td>
+<img src="docs/screenshots/all-devices-black.png" alt="Mockups" width="75%" /></td>
  
 </div>
 

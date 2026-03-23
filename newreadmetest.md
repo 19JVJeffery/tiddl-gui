@@ -1,28 +1,53 @@
 <div align="center">
 
-# ✨ <span style="color:#814793;">tiddl-gui</span>
-
-**<span style="color:#814793;">Download Tidal tracks, albums, and playlists at maximum quality — directly in your browser.</span>**
-
-<br>
-
-[![Live App](https://img.shields.io/badge/🚀%20Live%20App-Open%20Now-814793?style=for-the-badge&logoColor=white)](https://19jvjeffery.github.io/tiddl-gui/web/index.html)
-[![License](https://img.shields.io/badge/📄%20License-Apache%202.0-814793?style=for-the-badge)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/19JVJeffery/tiddl-gui?style=for-the-badge&color=814793)](https://github.com/19JVJeffery/tiddl-gui/stargazers)
+<!-- Gradient Title (GitHub-safe SVG trick) -->
+<img src="https://readme-typing-svg.demolab.com?font=Inter&size=38&duration=1&pause=999999&color=814793&center=true&vCenter=true&width=500&lines=tiddl-gui" />
 
 <br>
 
-<span style="color:#999;">No installation required — just open and go.</span>
+**Download Tidal tracks, albums, and playlists at maximum quality — directly in your browser.**
 
-<br>
+<br><br>
 
-<img src="docs/screenshots/all-devices-black.png" alt="Mockups" width="80%" />
+<!-- Glass-style badges -->
+<a href="https://19jvjeffery.github.io/tiddl-gui/web/index.html">
+  <img src="https://img.shields.io/badge/Live_App-Open-814793?style=for-the-badge&logo=vercel&logoColor=white&labelColor=2a1f2f" />
+</a>
+<a href="LICENSE">
+  <img src="https://img.shields.io/badge/License-Apache_2.0-814793?style=for-the-badge&labelColor=2a1f2f" />
+</a>
+<a href="https://github.com/19JVJeffery/tiddl-gui/stargazers">
+  <img src="https://img.shields.io/github/stars/19JVJeffery/tiddl-gui?style=for-the-badge&color=814793&labelColor=2a1f2f" />
+</a>
+
+<br><br>
+
+<i style="color:#888;">No installation required — just open and go.</i>
+
+<br><br>
+
+<!-- Dark / Light adaptive image -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/all-devices-black.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/all-devices-white.png">
+  <img src="docs/screenshots/all-devices-black.png" width="85%">
+</picture>
 
 </div>
 
 ---
 
-## ⚠️ <span style="color:#814793;">Disclaimer</span>
+## 🎬 Demo
+
+<div align="center">
+
+<img src="docs/demo.gif" width="90%" />
+
+</div>
+
+---
+
+## ⚠️ Disclaimer
 
 > [!WARNING]  
 > This project is **not affiliated with Tidal**.  
@@ -38,45 +63,41 @@
 
 ---
 
-## 🚀 <span style="color:#814793;">Features</span>
+## <span style="color:#814793;">🚀 Features</span>
 
 - 🎧 Download **tracks, albums, playlists, and mixes**
-- 💿 Supports **FLAC lossless + high-resolution audio**
-- 🔐 Secure login via official Tidal authentication
-- ⚡ Runs entirely in your browser (no backend)
-- 📦 No install, no setup, no dependencies
+- 💿 **FLAC + Hi-Res audio support**
+- 🔐 Secure Tidal authentication
+- ⚡ Fully browser-based (no backend)
+- 📦 Zero install, zero setup
 
 ---
 
-## 🧭 <span style="color:#814793;">How to Use</span>
+## <span style="color:#814793;">🧭 How to Use</span>
 
-### 1. 🔐 <span style="color:#814793;">Log In</span>
-- Go to **Account**
+### 🔐 Login
+- Open **Account**
 - Click **Login with Tidal**
-- Authorise in the new tab
-- Return — login completes automatically
+- Authorise → return → auto-login
 
-<span style="color:#999;">Token stored locally (`localStorage`) and refreshed automatically.</span>
-
----
-
-### 2. ⬇️ <span style="color:#814793;">Download Content</span>
-
-Paste any supported input:
-
-| Type | Example |
-|------|--------|
-| Full URL | `https://tidal.com/browse/track/103805726` |
-| Track | `track/103805726` |
-| Album | `album/103805723` |
-| Playlist | `playlist/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
-| Mix | `mix/0123456789abcdef` |
-
-<span style="color:#814793;"><strong>Select quality → Click Download</strong></span>
+<span style="color:#888;">Token stored locally & auto-refreshed.</span>
 
 ---
 
-### 🎚️ <span style="color:#814793;">Quality Options</span>
+### ⬇️ Download
+
+Paste:
+track/103805726
+album/103805723
+playlist/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+mix/0123456789abcdef
+
+
+Select quality → **Download**
+
+---
+
+### 🎚️ Quality
 
 | Quality | Format | Details |
 |:--|:--|:--|
@@ -86,30 +107,38 @@ Paste any supported input:
 | Max | `.flac` | Up to 24-bit / 192 kHz |
 
 > [!NOTE]  
-> Lossless / Max require an eligible Tidal subscription.  
+> Higher tiers require a Tidal subscription.  
 > DRM-protected streams cannot be downloaded.
 
 ---
 
-### 3. 🔎 <span style="color:#814793;">Search</span>
-
-- Enter artist / track / album / playlist
-- Click results to:
-  - ➕ Add to queue  
-  - 📂 Browse contents  
-  - ⬇️ Download individually or all  
+### 🔎 Search
+Search anything → click to download or expand.
 
 ---
 
-### 4. 📚 <span style="color:#814793;">Library</span>
-
-Browse your saved:
-- Tracks  
-- Albums  
-- Playlists  
+### 📚 Library
+Access saved content (login required)
 
 ---
 
-### 5. 🌐 <span style="color:#814793;">CORS Proxy</span>
+### 🌐 Proxy
 
-Default:
+Default:https://corsproxy.io
+
+
+Change in:
+**Settings → Proxy URL**
+
+---
+
+## <span style="color:#814793;">🛠️ Run Locally</span>
+
+```bash
+git clone https://github.com/19JVJeffery/tiddl-gui.git
+cd tiddl-gui
+python3 -m http.server 8080 --directory web
+npx serve web -l 8080
+
+Open → http://localhost:8080
+

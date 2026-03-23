@@ -10,25 +10,9 @@
 
 No installation needed — open the link and go.
 
-<table>
-  <tr>
-    <td align="center"><b>Account / Login</b></td>
-    <td align="center"><b>Download</b></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/account-tab.png" alt="Account tab — login with Tidal" width="540" /></td>
-    <td><img src="docs/screenshots/download-tab.png" alt="Download tab" width="540" /></td>
-  </tr>
-  <tr>
-    <td align="center"><b>Search</b></td>
-    <td align="center"><b>Library</b></td>
-  </tr>
-  <tr>
-    <td><img src="docs/screenshots/search-tab.png" alt="Search tab" width="540" /></td>
-    <td><img src="docs/screenshots/library-tab.png" alt="Library tab" width="540" /></td>
-  </tr>
-</table>
 
+<img src="docs/screenshots/all-devices-black.png" alt="Mockups" width="100%" /></td>
+ 
 </div>
 
 > [!WARNING]

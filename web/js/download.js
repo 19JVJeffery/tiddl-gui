@@ -141,7 +141,7 @@ async function fetchSegments(urls, onProgress) {
 // ─── Browser save helper ───────────────────────────────────────────────────
 
 function triggerDownload(data, filename, mimeType) {
-  const blob = new Blob([data], { type: mimeType });
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -920,13 +920,13 @@ function buildZip(files) {
   eocd.setUint32(16, localOffset, true); // offset of central dir
   eocd.setUint16(20, 0, true);           // comment length
 
-  // Concatenate everything into a single Uint8Array
-  const allParts = [...localParts, ...centralEntries, new Uint8Array(eocdBuf)];
-  const totalBytes = allParts.reduce((a, b) => a + b.byteLength, 0);
-  const zip = new Uint8Array(totalBytes);
-  let pos = 0;
-  for (const part of allParts) { zip.set(part, pos); pos += part.byteLength; }
-  return zip;
+  // Assemble the ZIP as a Blob from its constituent parts.
+  // Using Blob avoids allocating a single contiguous buffer equal to the total
+  // ZIP size, which can fail with "Array buffer allocation failed" for large
+  // collections (playlists, albums) where all track data would need to be
+  // copied into one block.
+  return new Blob([...localParts, ...centralEntries, new Uint8Array(eocdBuf)],
+    { type: "application/zip" });
 }
 
 // ─── Internal track data fetcher ─────────────────────────────────────────

@@ -6,8 +6,8 @@
  * tiddl/core/utils/download.py.
  */
 
-import { proxied, getMetadataEnable, getMetadataCover, getCoverSave, getCoverAllowed, getCoverSize } from "./config.js";
-import { getTrackStream, getVideoStream, getTrack, getAlbum, getAlbumItems, getPlaylist, getPlaylistItems, getMixItems, getArtistAlbums, getArtistSingles } from "./api.js";
+import { proxied, getMetadataEnable, getMetadataCover, getCoverSave, getCoverAllowed, getCoverSize, getMetadataLyrics, getLyricsTimestamps } from "./config.js";
+import { getTrackStream, getVideoStream, getTrack, getAlbum, getAlbumItems, getPlaylist, getPlaylistItems, getMixItems, getArtistAlbums, getArtistSingles, getTrackLyrics } from "./api.js";
 
 /** Delay (ms) before revoking an object URL after triggering a download. */
 const BLOB_URL_REVOKE_DELAY_MS = 1000;
@@ -565,6 +565,7 @@ function injectFlacTags(flacData, tags) {
   if (tags.year)        comments.push(`DATE=${tags.year}`);
   if (tags.isrc)        comments.push(`ISRC=${tags.isrc}`);
   if (tags.copyright)   comments.push(`COPYRIGHT=${tags.copyright}`);
+  if (tags.lyrics)      comments.push(`LYRICS=${tags.lyrics}`);
 
   if (!comments.length) return flacData;
 
@@ -695,6 +696,7 @@ function injectM4aTags(m4aData, tags) {
     buildTextAtom([0x61, 0x41, 0x52, 0x54], tags.albumArtist),  // aART
     buildTextAtom([0xA9, 0x64, 0x61, 0x79], tags.year),         // ©day
     buildTextAtom([0x63, 0x70, 0x72, 0x74], tags.copyright),    // cprt
+    buildTextAtom([0xA9, 0x6C, 0x79, 0x72], tags.lyrics),       // ©lyr
     tags.trackNumber ? buildIntAtom([0x74, 0x72, 0x6B, 0x6E], tags.trackNumber) : null, // trkn
     tags.discNumber  ? buildIntAtom([0x64, 0x69, 0x73, 0x6B], tags.discNumber)  : null, // disk
   ].filter(Boolean);
@@ -938,7 +940,8 @@ function buildZip(files) {
  * @returns {{ data: Uint8Array, extension: string, title: string,
  *             artist: string, trackNumber: number, discNumber: number,
  *             albumTitle: string, albumArtist: string, year: string,
- *             isrc: string, copyright: string, coverHash: string|null }}
+ *             isrc: string, copyright: string, coverHash: string|null,
+ *             lyrics: string|null }}
  */
 async function fetchTrackData(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
@@ -956,6 +959,22 @@ async function fetchTrackData(trackId, quality, onProgress) {
   const copyright = track.copyright || "";
   const coverHash = track.album?.cover || null;
 
+  let lyrics = null;
+  if (getMetadataLyrics()) {
+    try {
+      const lyricsData = await getTrackLyrics(trackId);
+      if (getLyricsTimestamps()) {
+        lyrics = lyricsData.subtitles || lyricsData.lyrics || null;
+      } else {
+        lyrics = lyricsData.lyrics
+          || (lyricsData.subtitles && lyricsData.subtitles.replace(/\[\d+:\d+\.\d+\]\s?/g, "").trim())
+          || null;
+      }
+    } catch {
+      // Lyrics not available for this track — skip silently.
+    }
+  }
+
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
   const streamInfo = await getTrackStream(trackId, quality);
   const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
@@ -971,7 +990,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
     onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
   );
 
-  return { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash };
+  return { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics };
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────
@@ -985,10 +1004,10 @@ async function fetchTrackData(trackId, quality, onProgress) {
  */
 export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameSuffix = "") {
   try {
-    let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash } = await fetchTrackData(trackId, quality, onProgress);
+    let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics } = await fetchTrackData(trackId, quality, onProgress);
 
     if (getMetadataEnable()) {
-      data = embedMetadata(data, extension, { title: rawTitle, artist: rawArtist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright });
+      data = embedMetadata(data, extension, { title: rawTitle, artist: rawArtist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright, lyrics });
     }
 
     const needCover = (getMetadataCover() || (getCoverSave() && getCoverAllowed().includes("track"))) && coverHash;
@@ -1059,6 +1078,7 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
             albumArtist: td.albumArtist || rawAlbumArtist,
             trackNumber: td.trackNumber, discNumber: td.discNumber,
             year: td.year || albumYear, isrc: td.isrc, copyright: td.copyright,
+            lyrics: td.lyrics,
           });
         }
         if (albumCover && getMetadataCover()) trackData = embedCoverArt(trackData, td.extension, albumCover);
@@ -1134,6 +1154,7 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
             albumTitle: td.albumTitle, albumArtist: td.albumArtist,
             trackNumber: td.trackNumber, discNumber: td.discNumber,
             year: td.year, isrc: td.isrc, copyright: td.copyright,
+            lyrics: td.lyrics,
           });
         }
         if (getMetadataCover() && td.coverHash) {
@@ -1202,6 +1223,7 @@ export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItem
             albumTitle: td.albumTitle, albumArtist: td.albumArtist,
             trackNumber: td.trackNumber, discNumber: td.discNumber,
             year: td.year, isrc: td.isrc, copyright: td.copyright,
+            lyrics: td.lyrics,
           });
         }
         if (getMetadataCover() && td.coverHash) {

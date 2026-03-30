@@ -22,6 +22,7 @@ import {
   getRewriteMetadata, setRewriteMetadata,
   getMetadataEnable, setMetadataEnable,
   getMetadataLyrics, setMetadataLyrics,
+  getLyricsTimestamps, setLyricsTimestamps,
   getMetadataCover, setMetadataCover,
   getMetadataAlbumReview, setMetadataAlbumReview,
   getCoverSave, setCoverSave,
@@ -439,6 +440,7 @@ export function loadSettingsForm() {
 
   setChk("setting-meta-enable",       getMetadataEnable());
   setChk("setting-meta-lyrics",       getMetadataLyrics());
+  setChk("setting-lyrics-timestamps", getLyricsTimestamps());
   setChk("setting-meta-cover",        getMetadataCover());
   setChk("setting-meta-album-review", getMetadataAlbumReview());
 
@@ -517,6 +519,7 @@ export function saveSettingsForm(appendLog) {
 
   setMetadataEnable(getChk("setting-meta-enable"));
   setMetadataLyrics(getChk("setting-meta-lyrics"));
+  setLyricsTimestamps(getChk("setting-lyrics-timestamps"));
   setMetadataCover(getChk("setting-meta-cover"));
   setMetadataAlbumReview(getChk("setting-meta-album-review"));
 

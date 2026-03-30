@@ -164,6 +164,10 @@ export async function getSession() {
 
 // ─── Streams ───────────────────────────────────────────────────────────────
 
+export async function getTrackLyrics(trackId) {
+  return apiFetch(`tracks/${trackId}/lyrics`);
+}
+
 export async function getTrackStream(trackId, quality = "HIGH") {
   return apiFetch(`tracks/${trackId}/playbackinfopostpaywall`, {
     audioquality: quality,

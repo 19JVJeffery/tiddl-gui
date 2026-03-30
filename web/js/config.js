@@ -116,6 +116,9 @@ export function setMetadataEnable(v)     { setSetting("tiddl_meta_enable", v ? "
 export function getMetadataLyrics()      { return getSetting("tiddl_meta_lyrics", "false") === "true"; }
 export function setMetadataLyrics(v)     { setSetting("tiddl_meta_lyrics", v ? "true" : "false"); }
 
+export function getLyricsTimestamps()    { return getSetting("tiddl_lyrics_timestamps", "true") === "true"; }
+export function setLyricsTimestamps(v)   { setSetting("tiddl_lyrics_timestamps", v ? "true" : "false"); }
+
 export function getMetadataCover()       { return getSetting("tiddl_meta_cover", "false") === "true"; }
 export function setMetadataCover(v)      { setSetting("tiddl_meta_cover", v ? "true" : "false"); }
 

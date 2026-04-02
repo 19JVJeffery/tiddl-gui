@@ -321,9 +321,13 @@ function upsertSubItemRow(rowIdx, subIdx, title, done, total, status) {
 
 // ─── Nav ─────────────────────────────────────────────────────────────────────
 
-let _detailOriginTab = "search";
+let _detailOriginTab   = "search";
+let _detailNavStack    = [];  // Stack of previously viewed detail states
+let _currentDetail     = null; // Currently displayed detail state
 
 function activateTab(tabId) {
+  _currentDetail    = null;
+  _detailNavStack   = [];
   document.querySelectorAll(".tab-btn").forEach((btn) =>
     btn.classList.toggle("active", btn.dataset.tab === tabId)
   );
@@ -333,7 +337,10 @@ function activateTab(tabId) {
 }
 
 function openDetailPanel(fromTab) {
-  _detailOriginTab = fromTab || "search";
+  // Only update the origin tab on fresh navigations; preserve it when drilling deeper.
+  if (_detailNavStack.length === 0) {
+    _detailOriginTab = fromTab || "search";
+  }
   // Show detail panel without changing sidebar active state
   document.querySelectorAll(".tab-panel").forEach((p) =>
     p.classList.toggle("hidden", p.id !== "panel-detail")
@@ -342,15 +349,29 @@ function openDetailPanel(fromTab) {
   document.querySelectorAll(".tab-btn").forEach((btn) =>
     btn.classList.toggle("active", btn.dataset.tab === _detailOriginTab)
   );
+  _updateDetailBackLabel();
+}
+
+function _updateDetailBackLabel() {
   const lbl = $("btn-detail-back-label");
-  if (lbl) {
+  if (!lbl) return;
+  if (_detailNavStack.length > 0) {
+    // Label shows the title of the detail we'd return to.
+    lbl.textContent = _detailNavStack[_detailNavStack.length - 1].title || "Back";
+  } else {
     const names = { search: "Search results", library: "Library" };
     lbl.textContent = names[_detailOriginTab] || "Back";
   }
 }
 
 function backFromDetail() {
-  activateTab(_detailOriginTab);
+  if (_detailNavStack.length > 0) {
+    const prev = _detailNavStack.pop();
+    _currentDetail = null;
+    navigateToDetail(prev.type, prev.id, prev.title, prev.sub, prev.cover, _detailOriginTab, prev.hintQuality, true);
+  } else {
+    activateTab(_detailOriginTab);
+  }
 }
 
 // ─── Auth UI ─────────────────────────────────────────────────────────────────
@@ -887,12 +908,13 @@ async function handleDownload() {
     // When FLAC is the preferred format, upgrade M4A quality tiers (LOW/HIGH) to LOSSLESS
     // so the download always produces a lossless file.
     const preferFlac = getPreferredFormat() === "flac";
-    const formatQuality = preferFlac && (requestedQuality === "LOW" || requestedQuality === "HIGH")
-      ? "LOSSLESS"
-      : requestedQuality;
-    // Cap to the item's known max quality (fallback for multi-item queues where
-    // individual items may not support the selected tier).
-    const quality      = effectiveDownloadQuality(item, formatQuality);
+    const flacUpgraded = preferFlac && (requestedQuality === "LOW" || requestedQuality === "HIGH");
+    const formatQuality = flacUpgraded ? "LOSSLESS" : requestedQuality;
+    // Cap to the item's known max quality. When the FLAC format preference caused
+    // an upgrade to LOSSLESS, skip the cap so a stale quality hint from the
+    // search/library API (which can differ across devices) does not silently
+    // downgrade the request back to a lossy tier.
+    const quality      = flacUpgraded ? formatQuality : effectiveDownloadQuality(item, formatQuality);
     const qStatusEl    = $(`queue-status-${qi}`);
     const queueItemEl  = $("download-queue")?.querySelector(`.queue-item[data-idx="${qi}"]`);
     const itemRowEl    = $(`dl-item-row-${qi}`);
@@ -1396,13 +1418,13 @@ function attachResultHandlers(container) {
       card.addEventListener("click", (e) => {
         if (e.target.closest(".card-queue-btn")) return;
         navigateToDetail(card.dataset.type, card.dataset.id,
-          card.dataset.title, card.dataset.sub, card.dataset.cover, "search",
+          card.dataset.title, card.dataset.sub, card.dataset.cover, _detailOriginTab,
           card.dataset.quality || null);
       });
       card.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           navigateToDetail(card.dataset.type, card.dataset.id,
-            card.dataset.title, card.dataset.sub, card.dataset.cover, "search",
+            card.dataset.title, card.dataset.sub, card.dataset.cover, _detailOriginTab,
             card.dataset.quality || null);
         }
       });
@@ -1543,7 +1565,18 @@ function _detailQueueBtnHtml(typeLabel, isInQueue) {
           Add ${escHtml(typeLabel)} to Queue`;
 }
 
-async function navigateToDetail(type, id, title, sub, cover, fromTab, hintQuality = null) {
+async function navigateToDetail(type, id, title, sub, cover, fromTab, hintQuality = null, skipStackPush = false) {
+  if (skipStackPush) {
+    // Called by backFromDetail — stack already popped; skip push.
+  } else if (_currentDetail !== null) {
+    // Navigating deeper from within the detail panel; save current state.
+    _detailNavStack.push({ ..._currentDetail });
+  } else {
+    // Fresh navigation from a tab; reset the stack and origin.
+    _detailNavStack   = [];
+    _detailOriginTab  = fromTab || "search";
+  }
+  _currentDetail = { type, id, title, sub, cover, hintQuality };
   openDetailPanel(fromTab);
 
   const header = $("detail-header");

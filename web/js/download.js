@@ -7,7 +7,7 @@
  */
 
 import { proxied, getMetadataEnable, getMetadataCover, getCoverSave, getCoverAllowed, getCoverSize, getMetadataLyrics, getLyricsTimestamps } from "./config.js";
-import { getTrackStream, getVideoStream, getTrack, getAlbum, getAlbumItems, getPlaylist, getPlaylistItems, getMixItems, getArtistAlbums, getArtistSingles, getTrackLyrics } from "./api.js";
+import { getTrackStream, getVideoStream, getTrack, getAlbum, getAllAlbumItems, getPlaylist, getAllPlaylistItems, getAllMixItems, getArtistAlbums, getArtistSingles, getTrackLyrics } from "./api.js";
 
 /** Delay (ms) before revoking an object URL after triggering a download. */
 const BLOB_URL_REVOKE_DELAY_MS = 1000;
@@ -1037,9 +1037,9 @@ export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameS
 export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSubItemProgress, nameSuffix = "") {
   try {
     onProgress?.(0, 1, `Fetching album info…`);
-    const [albumMeta, itemsData] = await Promise.all([
+    const [albumMeta, allItems] = await Promise.all([
       getAlbum(albumId),
-      getAlbumItems(albumId, 100, 0),
+      getAllAlbumItems(albumId),
     ]);
 
     const rawAlbumTitle  = albumMeta.title || "Unknown Album";
@@ -1057,7 +1057,7 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
       albumCover = await fetchCoverArt(albumMeta.cover, getCoverSize());
     }
 
-    const items = (itemsData.items || []).filter((i) => i.type === "track");
+    const items = allItems.filter((i) => i.type === "track");
     const zipFiles = [];
     const results = [];
 
@@ -1116,9 +1116,9 @@ export async function downloadAlbum(albumId, quality = "HIGH", onProgress, onSub
 export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress, onSubItemProgress, nameSuffix = "") {
   try {
     onProgress?.(0, 1, `Fetching playlist info…`);
-    const [playlistMeta, itemsData] = await Promise.all([
+    const [playlistMeta, allItems] = await Promise.all([
       getPlaylist(playlistId),
-      getPlaylistItems(playlistId, 100, 0),
+      getAllPlaylistItems(playlistId),
     ]);
 
     const playlistTitle = sanitize(playlistMeta.title || "Playlist");
@@ -1132,7 +1132,7 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
       playlistCover = await fetchCoverArt(playlistMeta.squareImage, Math.min(getCoverSize(), 1080));
     }
 
-    const items = (itemsData.items || []).filter((i) => i.type === "track");
+    const items = allItems.filter((i) => i.type === "track");
     const zipFiles = [];
     const results = [];
     // Cache cover art per hash to avoid redundant fetches across tracks
@@ -1199,10 +1199,10 @@ export async function downloadPlaylist(playlistId, quality = "HIGH", onProgress,
 export async function downloadMix(mixId, quality = "HIGH", onProgress, onSubItemProgress, nameSuffix = "") {
   try {
     onProgress?.(0, 1, `Fetching mix items…`);
-    const itemsData = await getMixItems(mixId, 100, 0);
+    const allItems = await getAllMixItems(mixId);
 
     const folder = sanitize(`Mix-${mixId}`);
-    const items = (itemsData.items || []).filter((i) => i.type === "track");
+    const items = allItems.filter((i) => i.type === "track");
     const zipFiles = [];
     const results = [];
     const coverCache = new Map();

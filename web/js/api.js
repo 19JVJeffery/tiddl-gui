@@ -158,6 +158,10 @@ export async function getAllPlaylistItems(uuid) {
   return fetchAllItems((limit, offset) => getPlaylistItems(uuid, limit, offset));
 }
 
+export async function getAllMixItems(mixId) {
+  return fetchAllItems((limit, offset) => getMixItems(mixId, limit, offset));
+}
+
 export async function getSession() {
   return apiFetch("sessions");
 }

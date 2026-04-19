@@ -1085,6 +1085,9 @@ async function fetchTrackData(trackId, quality, onProgress) {
   } catch (err) {
     if (!isSegmentTokenExpiryError(err)) throw err;
 
+    // Single retry by design: an immediate re-fetch should provide fresh signed
+    // segment URLs. Repeating beyond one retry risks long loops on persistent
+    // permission/subscription/geoblocking failures and slows large queues.
     onProgress?.(0, 1, "Segment URL expired (403). Refreshing stream token and retrying once…");
     const refreshed = await getTrackStreamWithFallback(trackId, streamQuality, onProgress);
     streamQuality = refreshed.quality;

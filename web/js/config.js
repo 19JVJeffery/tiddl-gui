@@ -34,19 +34,59 @@ export function setClientSecret(v) {
 // ─── CORS proxy ───────────────────────────────────────────────────────────────
 
 /** CORS proxy prefix — every request to Tidal is sent through this URL. */
+const DEFAULT_CORS_PROXY = "https://corsproxy.io/?url=";
+
+function isCorsproxyHost(proxy) {
+  try {
+    const host = new URL(proxy).hostname.toLowerCase();
+    return host === "corsproxy.io" || host.endsWith(".corsproxy.io");
+  } catch {
+    return false;
+  }
+}
+
+function normalizeCorsProxy(v) {
+  const raw = String(v ?? "").trim();
+  if (!raw) return DEFAULT_CORS_PROXY;
+  const candidate = /^corsproxy\.io(?:\/.*)?$/i.test(raw) ? `https://${raw}` : raw;
+
+  if (isCorsproxyHost(candidate)) {
+    // Accept common forms and normalize to a working prefix.
+    try {
+      const parsed = new URL(candidate);
+      const params = new URLSearchParams(parsed.search);
+      params.delete("url");
+      const query = params.toString();
+      const prefix = `${parsed.origin}${parsed.pathname}`;
+      return query
+        ? `${prefix}?${query}&url=`
+        : `${prefix}?url=`;
+    } catch {
+      return DEFAULT_CORS_PROXY;
+    }
+  }
+
+  return raw;
+}
+
 export function getCorsProxy() {
-  return localStorage.getItem("tiddl_cors_proxy") ?? "https://corsproxy.io/?url=";
+  const saved = localStorage.getItem("tiddl_cors_proxy");
+  return normalizeCorsProxy(saved);
 }
 export function setCorsProxy(v) {
-  localStorage.setItem("tiddl_cors_proxy", v);
+  const raw = String(v ?? "").trim();
+  if (!raw) {
+    localStorage.removeItem("tiddl_cors_proxy");
+    return;
+  }
+  localStorage.setItem("tiddl_cors_proxy", normalizeCorsProxy(raw));
 }
 
 /** Wrap a target URL with the configured CORS proxy. */
 export function proxied(url) {
-  const proxy = getCorsProxy().trim();
-  if (!proxy) return url;
+  const proxy = getCorsProxy();
   // corsproxy.io expects the URL to be encoded as a query param
-  if (proxy.includes('corsproxy.io')) {
+  if (isCorsproxyHost(proxy)) {
     return proxy + encodeURIComponent(url);
   }
   // fallback: just append raw

@@ -5,12 +5,9 @@
  */
 
 import { API_URL, proxied } from "./config.js";
-import { getValidToken, loadAuth } from "./auth.js";
+import { getValidToken, loadAuth, refreshToken } from "./auth.js";
 
 async function apiFetch(endpoint, params = {}) {
-  const token = await getValidToken();
-  if (!token) throw new Error("Not authenticated");
-
   const auth = loadAuth();
   const defaultParams = { countryCode: auth?.country_code || "US" };
   const merged = { ...defaultParams, ...params };
@@ -18,15 +15,39 @@ async function apiFetch(endpoint, params = {}) {
   const qs = new URLSearchParams(merged).toString();
   const url = `${API_URL}/${endpoint}?${qs}`;
 
-  const res = await fetch(proxied(url), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-    },
-    credentials: "omit",
-  });
+  async function doRequest(token) {
+    const res = await fetch(proxied(url), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      credentials: "omit",
+    });
+    let json = {};
+    try {
+      json = await res.json();
+    } catch {
+      json = {};
+    }
+    return { res, json };
+  }
 
-  const json = await res.json();
+  let token = await getValidToken();
+  if (!token) throw new Error("Not authenticated");
+
+  let { res, json } = await doRequest(token);
+  if (!res.ok && (res.status === 401 || res.status === 403)) {
+    try {
+      const refreshed = await refreshToken();
+      token = refreshed?.token;
+      if (token) {
+        ({ res, json } = await doRequest(token));
+      }
+    } catch {
+      // Keep original error handling below.
+    }
+  }
+
   if (!res.ok) {
     const msg = json?.userMessage || json?.error_description || `HTTP ${res.status}`;
     throw new Error(msg);
@@ -120,8 +141,9 @@ export async function getUserPlaylists(limit = 50, offset = 0) {
 async function fetchAllItems(fetchFn, pageSize = 50) {
   const first = await fetchFn(pageSize, 0);
   const firstItems = Array.isArray(first.items) ? first.items : [];
-  const hasKnownTotal = Number.isFinite(first.totalNumberOfItems);
-  const total = hasKnownTotal ? first.totalNumberOfItems : null;
+  const parsedTotal = Number(first.totalNumberOfItems);
+  const hasKnownTotal = Number.isFinite(parsedTotal) && parsedTotal >= 0;
+  const total = hasKnownTotal ? parsedTotal : null;
   let items = firstItems.slice();
 
   const pageSignature = (arr) => arr
@@ -129,20 +151,38 @@ async function fetchAllItems(fetchFn, pageSize = 50) {
     .join("|");
   let lastSignature = pageSignature(firstItems);
 
-  let offset = items.length;
-  while (!hasKnownTotal || offset < total) {
+  const firstOffset = Number(first?.offset);
+  const firstLimit = Number(first?.limit);
+  let offset = Number.isFinite(firstOffset) && Number.isFinite(firstLimit) && firstLimit > 0
+    ? firstOffset + firstLimit
+    : items.length;
+
+  const MAX_PAGES = 2000;
+  let pagesFetched = 0;
+  while ((!hasKnownTotal || items.length < total) && pagesFetched < MAX_PAGES) {
+    pagesFetched += 1;
     const page = await fetchFn(pageSize, offset);
     const pageItems = Array.isArray(page.items) ? page.items : [];
     if (!pageItems.length) break;
+
     const signature = pageSignature(pageItems);
-    if (!hasKnownTotal && signature && signature === lastSignature) break;
     items = items.concat(pageItems);
+
+    const pageOffset = Number(page?.offset);
+    const pageLimit = Number(page?.limit);
+    const reportedNextOffset = Number.isFinite(pageOffset) && Number.isFinite(pageLimit) && pageLimit > 0
+      ? pageOffset + pageLimit
+      : offset + pageItems.length;
+    const nextOffset = Math.max(offset + pageItems.length, reportedNextOffset);
+
+    if (signature && signature === lastSignature && nextOffset <= offset) break;
     lastSignature = signature;
-    offset += pageItems.length;
+    offset = nextOffset;
+
     if (!hasKnownTotal && pageItems.length < pageSize) break;
   }
 
-  return items;
+  return hasKnownTotal ? items.slice(0, total) : items;
 }
 
 export async function getAllUserFavoriteTracks() {

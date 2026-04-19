@@ -31,6 +31,11 @@ function decodeManifestPayload(manifest) {
 function parseBtsManifest(manifest) {
   const decoded = decodeManifestPayload(manifest);
   const data = JSON.parse(decoded);
+  if (!Array.isArray(data.urls) || data.urls.length === 0) {
+    const err = new Error("Invalid BTS manifest: missing segment URLs");
+    err.code = "EMANIFEST_INVALID_BTS";
+    throw err;
+  }
 
   const codecs = String(data.codecs || "").toLowerCase();
   const extension = codecs.includes("flac") ? ".flac" : ".m4a";
@@ -88,6 +93,11 @@ function parseDashManifest(manifest) {
     const segmentNumber = startNumber + i;
     urls.push(resolveDashUrl(replaceNumber(urlTemplate, segmentNumber)));
   }
+  if (!urls.length) {
+    const err = new Error("Invalid DASH manifest: missing segment URLs");
+    err.code = "EMANIFEST_INVALID_DASH";
+    throw err;
+  }
 
   const representations = doc.getElementsByTagNameNS(NS, "Representation").length
     ? [...doc.getElementsByTagNameNS(NS, "Representation")]
@@ -116,7 +126,11 @@ function parseStreamManifest(streamInfo) {
 
   // Tidal responses can occasionally omit/alter manifestMimeType; infer from payload.
   const decoded = decodeManifestPayload(manifest).trim();
-  if (!decoded) throw new Error("Empty stream manifest");
+  if (!decoded) {
+    const err = new Error("Empty stream manifest");
+    err.code = "EMANIFEST_EMPTY";
+    throw err;
+  }
   if (decoded.startsWith("{") || decoded.startsWith("[")) {
     return parseBtsManifest(manifest);
   }
@@ -124,7 +138,9 @@ function parseStreamManifest(streamInfo) {
     return parseDashManifest(manifest);
   }
 
-  throw new Error(`Unsupported manifest type: ${manifestMimeType || "unknown"}`);
+  const err = new Error(`Unsupported manifest type: ${manifestMimeType || "unknown"}`);
+  err.code = "EMANIFEST_UNSUPPORTED";
+  throw err;
 }
 
 // ─── Segment fetching ──────────────────────────────────────────────────────
@@ -1064,17 +1080,21 @@ function shouldTryQualityFallback(err) {
 }
 
 function shouldTryAlternatePlaybackMode(err) {
+  const code = String(err?.code || "");
+  if (code && /^(ENCRYPTED_STREAM|EMANIFEST_)/.test(code)) return true;
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
   if (/not authenticated|unauthorized|token/.test(msg)) return false;
-  return /\bstream is encrypted\b|\bunsupported manifest\b|\bempty stream manifest\b|\bunsupported manifest type\b|\bplayback mode\b|\bassetpresentation\b|\bdrm\b|\bcipher\b/.test(msg);
+  return /\bassetpresentation\b|\bplaybackmode\b|\bplayback mode\b|\bdrm\b|\bcipher\b/.test(msg);
 }
 
 function ensureStreamIsDownloadable(parsedManifest) {
   if (parsedManifest.encryptionType && parsedManifest.encryptionType !== "NONE") {
-    throw new Error(
+    const err = new Error(
       `Stream is encrypted (${parsedManifest.encryptionType}). Encrypted streams cannot be downloaded in the browser.`
     );
+    err.code = "ENCRYPTED_STREAM";
+    throw err;
   }
 }
 
@@ -1088,7 +1108,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
 
   for (let i = 0; i < candidates.length; i++) {
     const q = candidates[i];
-    let continueWithLowerQuality = false;
+    let tryNextQuality = false;
     for (let modeIndex = 0; modeIndex < TRACK_PLAYBACK_MODE_CANDIDATES.length; modeIndex++) {
       const playbackMode = TRACK_PLAYBACK_MODE_CANDIDATES[modeIndex];
       for (let attempt = 0; attempt <= PLAYBACK_NOT_READY_RETRIES; attempt++) {
@@ -1130,13 +1150,13 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
             break;
           }
           if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
-          continueWithLowerQuality = true;
+          tryNextQuality = true;
           break;
         }
       }
-      if (continueWithLowerQuality) break;
+      if (tryNextQuality) break;
     }
-    if (continueWithLowerQuality) continue;
+    if (tryNextQuality) continue;
   }
 
   throw lastErr || new Error("Unable to fetch track stream");

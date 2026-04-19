@@ -195,6 +195,7 @@ export async function getTrackStream(trackId, quality = "HIGH") {
     audioquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
+    nocache: Date.now(),
   });
 }
 
@@ -203,5 +204,6 @@ export async function getVideoStream(videoId, quality = "HIGH") {
     videoquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
+    nocache: Date.now(),
   });
 }

@@ -1071,7 +1071,7 @@ function isSegmentTokenExpiryError(err) {
 function isLikelyProxySegmentTokenBindingError(err) {
   const info = err?.segmentFetch;
   if (info && info.hasProxy) {
-    return info.proxyStatus === 403 && info.directStatus === null;
+    return info.proxyStatus === 403 && info.directStatus == null;
   }
   const msg = String(err?.message || "").toLowerCase();
   return /segment fetch failed: 403\b/.test(msg) && !/direct=/.test(msg);
@@ -1190,7 +1190,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
       try {
         data = await downloadFromUrls(urls);
       } catch (directOnlyErr) {
-        if (!isSegmentTokenExpiryError(directOnlyErr) || !isLikelyProxySegmentTokenBindingError(directOnlyErr)) {
+        if (!(isSegmentTokenExpiryError(directOnlyErr) && isLikelyProxySegmentTokenBindingError(directOnlyErr))) {
           throw directOnlyErr;
         }
 

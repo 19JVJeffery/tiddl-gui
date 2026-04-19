@@ -1081,7 +1081,7 @@ function shouldTryQualityFallback(err) {
 
 function shouldTryAlternatePlaybackMode(err) {
   const code = String(err?.code || "");
-  if (code && /^(ENCRYPTED_STREAM|EMANIFEST_)/.test(code)) return true;
+  if (code && /^EMANIFEST_/.test(code)) return true;
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
   if (/not authenticated|unauthorized|token/.test(msg)) return false;

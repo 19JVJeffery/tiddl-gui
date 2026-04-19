@@ -18,8 +18,18 @@ const BLOB_URL_REVOKE_DELAY_MS = 1000;
  * Parse a `application/vnd.tidal.bts` (BTS JSON) manifest.
  * Returns { urls: string[], extension: string }.
  */
+function decodeManifestPayload(manifest) {
+  const raw = String(manifest ?? "");
+  if (!raw) return "";
+  try {
+    return atob(raw);
+  } catch {
+    return raw;
+  }
+}
+
 function parseBtsManifest(manifest) {
-  const decoded = atob(manifest);
+  const decoded = decodeManifestPayload(manifest);
   const data = JSON.parse(decoded);
 
   const codecs = String(data.codecs || "").toLowerCase();
@@ -33,7 +43,7 @@ function parseBtsManifest(manifest) {
  * Returns { urls: string[], extension: string }.
  */
 function parseDashManifest(manifest) {
-  const decoded = atob(manifest);
+  const decoded = decodeManifestPayload(manifest);
   const parser = new DOMParser();
   const doc = parser.parseFromString(decoded, "application/xml");
 
@@ -96,14 +106,25 @@ function parseDashManifest(manifest) {
 
 function parseStreamManifest(streamInfo) {
   const { manifest, manifestMimeType } = streamInfo;
-  switch (manifestMimeType) {
-    case "application/vnd.tidal.bts":
-      return parseBtsManifest(manifest);
-    case "application/dash+xml":
-      return parseDashManifest(manifest);
-    default:
-      throw new Error(`Unsupported manifest type: ${manifestMimeType}`);
+  const mime = String(manifestMimeType || "").toLowerCase();
+  if (mime === "application/vnd.tidal.bts") {
+    return parseBtsManifest(manifest);
   }
+  if (mime === "application/dash+xml") {
+    return parseDashManifest(manifest);
+  }
+
+  // Tidal responses can occasionally omit/alter manifestMimeType; infer from payload.
+  const decoded = decodeManifestPayload(manifest).trim();
+  if (!decoded) throw new Error("Empty stream manifest");
+  if (decoded.startsWith("{") || decoded.startsWith("[")) {
+    return parseBtsManifest(manifest);
+  }
+  if (decoded.startsWith("<")) {
+    return parseDashManifest(manifest);
+  }
+
+  throw new Error(`Unsupported manifest type: ${manifestMimeType || "unknown"}`);
 }
 
 // ─── Segment fetching ──────────────────────────────────────────────────────
@@ -1017,6 +1038,7 @@ const QUALITY_FALLBACKS = {
 
 const PLAYBACK_NOT_READY_RETRIES = 3;
 const PLAYBACK_NOT_READY_RETRY_BASE_DELAY_MS = 1200;
+const TRACK_PLAYBACK_MODE_CANDIDATES = ["STREAM", "OFFLINE"];
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1041,6 +1063,21 @@ function shouldTryQualityFallback(err) {
     || isPlaybackAssetNotReadyError(err);
 }
 
+function shouldTryAlternatePlaybackMode(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  if (!msg) return false;
+  if (/not authenticated|unauthorized|token/.test(msg)) return false;
+  return /stream is encrypted|manifest|playback|assetpresentation|offline|stream mode/.test(msg);
+}
+
+function ensureStreamIsDownloadable(parsedManifest) {
+  if (parsedManifest.encryptionType && parsedManifest.encryptionType !== "NONE") {
+    throw new Error(
+      `Stream is encrypted (${parsedManifest.encryptionType}). Encrypted streams cannot be downloaded in the browser.`
+    );
+  }
+}
+
 async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress, options = {}) {
   const {
     allowProxyFallback = true,
@@ -1051,37 +1088,50 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
 
   for (let i = 0; i < candidates.length; i++) {
     const q = candidates[i];
-    for (let attempt = 0; attempt <= PLAYBACK_NOT_READY_RETRIES; attempt++) {
-      try {
-        if (i > 0 && attempt === 0) {
-          onProgress?.(0, 1, `Requested quality unavailable, retrying with ${q}…`);
+    for (let modeIndex = 0; modeIndex < TRACK_PLAYBACK_MODE_CANDIDATES.length; modeIndex++) {
+      const playbackMode = TRACK_PLAYBACK_MODE_CANDIDATES[modeIndex];
+      for (let attempt = 0; attempt <= PLAYBACK_NOT_READY_RETRIES; attempt++) {
+        try {
+          if (i > 0 && attempt === 0 && modeIndex === 0) {
+            onProgress?.(0, 1, `Requested quality unavailable, retrying with ${q}…`);
+          }
+          if (modeIndex > 0 && attempt === 0) {
+            onProgress?.(0, 1, `Retrying stream request with ${playbackMode} playback mode…`);
+          }
+          const streamRes = await getTrackStream(trackId, q, {
+            allowProxyFallback,
+            includeRequestMeta: true,
+            preferDirect,
+            playbackMode,
+          });
+          const streamInfo = streamRes?.data ?? streamRes;
+          // `includeRequestMeta` is always requested above; default only as a guard
+          // against unexpected response-shape changes.
+          const requestMeta = (streamRes && typeof streamRes === "object" && streamRes.requestMeta)
+            ? streamRes.requestMeta
+            : { usedProxy: false };
+          const parsedManifest = parseStreamManifest(streamInfo);
+          ensureStreamIsDownloadable(parsedManifest);
+          return { streamInfo, parsedManifest, quality: q, requestMeta, playbackMode };
+        } catch (err) {
+          lastErr = err;
+          if (isPlaybackAssetNotReadyError(err) && attempt < PLAYBACK_NOT_READY_RETRIES) {
+            const retryDelayMs = PLAYBACK_NOT_READY_RETRY_BASE_DELAY_MS * (attempt + 1);
+            onProgress?.(
+              0,
+              1,
+              `Asset not ready yet; retrying stream request in ${(retryDelayMs / 1000).toFixed(1)}s (${attempt + 1}/${PLAYBACK_NOT_READY_RETRIES})…`
+            );
+            await wait(retryDelayMs);
+            continue;
+          }
+          if (modeIndex < TRACK_PLAYBACK_MODE_CANDIDATES.length - 1 && shouldTryAlternatePlaybackMode(err)) {
+            break;
+          }
+          if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
+          modeIndex = TRACK_PLAYBACK_MODE_CANDIDATES.length;
+          break;
         }
-        const streamRes = await getTrackStream(trackId, q, {
-          allowProxyFallback,
-          includeRequestMeta: true,
-          preferDirect,
-        });
-        const streamInfo = streamRes?.data ?? streamRes;
-        // `includeRequestMeta` is always requested above; default only as a guard
-        // against unexpected response-shape changes.
-        const requestMeta = (streamRes && typeof streamRes === "object" && streamRes.requestMeta)
-          ? streamRes.requestMeta
-          : { usedProxy: false };
-        return { streamInfo, quality: q, requestMeta };
-      } catch (err) {
-        lastErr = err;
-        if (isPlaybackAssetNotReadyError(err) && attempt < PLAYBACK_NOT_READY_RETRIES) {
-          const retryDelayMs = PLAYBACK_NOT_READY_RETRY_BASE_DELAY_MS * (attempt + 1);
-          onProgress?.(
-            0,
-            1,
-            `Asset not ready yet; retrying stream request in ${(retryDelayMs / 1000).toFixed(1)}s (${attempt + 1}/${PLAYBACK_NOT_READY_RETRIES})…`
-          );
-          await wait(retryDelayMs);
-          continue;
-        }
-        if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
-        break;
       }
     }
   }
@@ -1153,13 +1203,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
   const initial = await getTrackStreamWithFallback(trackId, quality, onProgress);
   let streamQuality = initial.quality;
   let segmentStrategy = getSegmentStrategyFromRequestMeta(initial.requestMeta);
-  let { urls, extension, encryptionType } = parseStreamManifest(initial.streamInfo);
-
-  if (encryptionType && encryptionType !== "NONE") {
-    throw new Error(
-      `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
-    );
-  }
+  let { urls, extension } = initial.parsedManifest;
 
   const downloadFromUrls = async (segmentUrls) => {
     onProgress?.(0, segmentUrls.length, `Downloading ${segmentUrls.length} segment(s)…`);
@@ -1183,15 +1227,9 @@ async function fetchTrackData(trackId, quality, onProgress) {
     const refreshed = await getTrackStreamWithFallback(trackId, streamQuality, onProgress);
     streamQuality = refreshed.quality;
     segmentStrategy = getSegmentStrategyFromRequestMeta(refreshed.requestMeta);
-    const reparsed = parseStreamManifest(refreshed.streamInfo);
+    const reparsed = refreshed.parsedManifest;
     urls = reparsed.urls;
     extension = reparsed.extension;
-    encryptionType = reparsed.encryptionType;
-    if (encryptionType && encryptionType !== "NONE") {
-      throw new Error(
-        `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
-      );
-    }
     try {
       data = await downloadFromUrls(urls);
     } catch (retryErr) {
@@ -1204,15 +1242,9 @@ async function fetchTrackData(trackId, quality, onProgress) {
       });
       streamQuality = directOnly.quality;
       segmentStrategy = getSegmentStrategyFromRequestMeta(directOnly.requestMeta);
-      const directParsed = parseStreamManifest(directOnly.streamInfo);
+      const directParsed = directOnly.parsedManifest;
       urls = directParsed.urls;
       extension = directParsed.extension;
-      encryptionType = directParsed.encryptionType;
-      if (encryptionType && encryptionType !== "NONE") {
-        throw new Error(
-          `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
-        );
-      }
       try {
         data = await downloadFromUrls(urls);
       } catch (directOnlyErr) {
@@ -1227,15 +1259,9 @@ async function fetchTrackData(trackId, quality, onProgress) {
         });
         streamQuality = proxyOnly.quality;
         segmentStrategy = "proxy-only";
-        const proxyParsed = parseStreamManifest(proxyOnly.streamInfo);
+        const proxyParsed = proxyOnly.parsedManifest;
         urls = proxyParsed.urls;
         extension = proxyParsed.extension;
-        encryptionType = proxyParsed.encryptionType;
-        if (encryptionType && encryptionType !== "NONE") {
-          throw new Error(
-            `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
-          );
-        }
         data = await downloadFromUrls(urls);
       }
     }

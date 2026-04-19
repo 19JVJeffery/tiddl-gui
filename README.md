@@ -25,6 +25,7 @@ If you would like to support development of this tool, please donate at my Ko-fi
   <img width="25%" alt="support_me_on_kofi_beige" src="https://github.com/user-attachments/assets/8763d962-1c6e-4fd3-b46c-592c4fc04e75" />
 </a>
 ---
+
 ## How to use
 
 ### 1 — Log in

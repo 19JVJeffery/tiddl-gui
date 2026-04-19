@@ -48,11 +48,12 @@ function isCorsproxyHost(proxy) {
 function normalizeCorsProxy(v) {
   const raw = String(v ?? "").trim();
   if (!raw) return DEFAULT_CORS_PROXY;
+  const candidate = /^corsproxy\.io(?:\/.*)?$/i.test(raw) ? `https://${raw}` : raw;
 
-  if (isCorsproxyHost(raw)) {
+  if (isCorsproxyHost(candidate)) {
     // Accept common forms and normalize to a working prefix.
     try {
-      const parsed = new URL(raw);
+      const parsed = new URL(candidate);
       const params = new URLSearchParams(parsed.search);
       params.delete("url");
       const query = params.toString();

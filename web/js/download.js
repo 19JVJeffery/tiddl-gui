@@ -1151,7 +1151,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
         allowProxyFallback: false,
       });
       streamQuality = directOnly.quality;
-      segmentStrategy = "direct-only";
+      segmentStrategy = getSegmentStrategyFromRequestMeta(directOnly.requestMeta);
       const directParsed = parseStreamManifest(directOnly.streamInfo);
       urls = directParsed.urls;
       extension = directParsed.extension;

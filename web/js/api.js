@@ -15,7 +15,8 @@ import { getValidToken, loadAuth, refreshToken } from "./auth.js";
  */
 const MAX_PAGINATION_PAGES = 2000;
 
-async function apiFetch(endpoint, params = {}) {
+async function apiFetch(endpoint, params = {}, options = {}) {
+  const { preferDirect = false } = options;
   const auth = loadAuth();
   const defaultParams = { countryCode: auth?.country_code || "US" };
   const merged = { ...defaultParams, ...params };
@@ -23,8 +24,9 @@ async function apiFetch(endpoint, params = {}) {
   const qs = new URLSearchParams(merged).toString();
   const url = `${API_URL}/${endpoint}?${qs}`;
 
-  async function doRequest(token) {
-    const res = await fetch(proxied(url), {
+  async function doRequest(token, useProxy = true) {
+    const targetUrl = useProxy ? proxied(url) : url;
+    const res = await fetch(targetUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
@@ -40,16 +42,26 @@ async function apiFetch(endpoint, params = {}) {
     return { res, json };
   }
 
+  async function doPreferredRequest(token) {
+    if (!preferDirect) return doRequest(token, true);
+    try {
+      return await doRequest(token, false);
+    } catch {
+      // Some environments block direct API CORS requests; fall back to proxy.
+      return doRequest(token, true);
+    }
+  }
+
   let token = await getValidToken();
   if (!token) throw new Error("Not authenticated");
 
-  let { res, json } = await doRequest(token);
+  let { res, json } = await doPreferredRequest(token);
   if (!res.ok && (res.status === 401 || res.status === 403)) {
     try {
       const refreshed = await refreshToken();
       token = refreshed?.token;
       if (token) {
-        ({ res, json } = await doRequest(token));
+        ({ res, json } = await doPreferredRequest(token));
       }
     } catch {
       // Keep original error handling below.
@@ -234,7 +246,7 @@ export async function getTrackStream(trackId, quality = "HIGH") {
     audioquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
-  });
+  }, { preferDirect: true });
 }
 
 export async function getVideoStream(videoId, quality = "HIGH") {
@@ -242,5 +254,5 @@ export async function getVideoStream(videoId, quality = "HIGH") {
     videoquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
-  });
+  }, { preferDirect: true });
 }

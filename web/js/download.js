@@ -1081,6 +1081,15 @@ async function fetchTrackData(trackId, quality, onProgress) {
   const { streamInfo } = await getTrackStreamWithFallback(trackId, quality, onProgress);
   const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
 
+  // Debug: log manifest and segment URLs
+  if (attempt && attempt > 0) {
+    console.info('[tiddl] [RETRY] Manifest after token refresh:', streamInfo);
+    console.info('[tiddl] [RETRY] Segment URLs after token refresh:', urls);
+  } else {
+    console.info('[tiddl] Manifest:', streamInfo);
+    console.info('[tiddl] Segment URLs:', urls);
+  }
+
   if (encryptionType && encryptionType !== "NONE") {
     throw new Error(
       `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`

@@ -149,9 +149,9 @@ export async function getUserPlaylists(limit = 50, offset = 0) {
 async function fetchAllItems(fetchFn, pageSize = 50) {
   const first = await fetchFn(pageSize, 0);
   const firstItems = Array.isArray(first.items) ? first.items : [];
-  const parsedTotal = Number(first.totalNumberOfItems);
-  const hasKnownTotal = Number.isFinite(parsedTotal) && parsedTotal >= 0;
-  const total = hasKnownTotal ? parsedTotal : null;
+  const numericTotal = Number(first.totalNumberOfItems);
+  const hasKnownTotal = Number.isFinite(numericTotal) && numericTotal >= 0;
+  const total = hasKnownTotal ? numericTotal : null;
   let items = firstItems.slice();
 
   const pageSignature = (arr) => arr
@@ -184,9 +184,8 @@ async function fetchAllItems(fetchFn, pageSize = 50) {
 
     // If the API returns the exact same page and does not advance offset,
     // stop to avoid an infinite loop.
-    const repeatedPage = signature && signature === lastSignature;
     const stalledOffset = nextOffset <= offset;
-    if (repeatedPage && stalledOffset) break;
+    if (stalledOffset) break;
     lastSignature = signature;
     offset = nextOffset;
 

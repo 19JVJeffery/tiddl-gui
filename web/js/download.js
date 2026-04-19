@@ -990,7 +990,7 @@ function shouldTryQualityFallback(err) {
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
   if (/not authenticated|unauthorized|token/.test(msg)) return false;
-  return /(quality|audioquality|unsupported|not available|subscription|plan)/.test(msg);
+  return /\b(?:quality|audioquality|unsupported|subscription|plan)\b|not available\b/.test(msg);
 }
 
 async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress) {

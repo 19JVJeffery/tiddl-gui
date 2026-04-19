@@ -7,6 +7,12 @@
 import { API_URL, proxied } from "./config.js";
 import { getValidToken, loadAuth, refreshToken } from "./auth.js";
 
+/**
+ * Safety guard for paginated endpoints.
+ * Prevents infinite loops if an upstream API/proxy keeps repeating pages or offsets.
+ */
+const MAX_PAGINATION_PAGES = 2000;
+
 async function apiFetch(endpoint, params = {}) {
   const auth = loadAuth();
   const defaultParams = { countryCode: auth?.country_code || "US" };
@@ -157,9 +163,8 @@ async function fetchAllItems(fetchFn, pageSize = 50) {
     ? firstOffset + firstLimit
     : items.length;
 
-  const MAX_PAGES = 2000;
   let pagesFetched = 0;
-  while ((!hasKnownTotal || items.length < total) && pagesFetched < MAX_PAGES) {
+  while ((!hasKnownTotal || items.length < total) && pagesFetched < MAX_PAGINATION_PAGES) {
     pagesFetched += 1;
     const page = await fetchFn(pageSize, offset);
     const pageItems = Array.isArray(page.items) ? page.items : [];
@@ -175,7 +180,11 @@ async function fetchAllItems(fetchFn, pageSize = 50) {
       : offset + pageItems.length;
     const nextOffset = Math.max(offset + pageItems.length, reportedNextOffset);
 
-    if (signature && signature === lastSignature && nextOffset <= offset) break;
+    // If the API returns the exact same page and does not advance offset,
+    // stop to avoid an infinite loop.
+    const repeatedPage = signature && signature === lastSignature;
+    const stalledOffset = nextOffset <= offset;
+    if (repeatedPage && stalledOffset) break;
     lastSignature = signature;
     offset = nextOffset;
 

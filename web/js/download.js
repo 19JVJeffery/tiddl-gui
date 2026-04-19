@@ -45,7 +45,7 @@ function parseDashManifest(manifest) {
   const segTpl = pick("SegmentTemplate");
   const urlTemplate = segTpl?.getAttribute("media") || "";
   const initTemplate = segTpl?.getAttribute("initialization") || "";
-  const startNumber = Math.max(parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1, 1);
+  const startNumber = parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1;
 
   const timeline = doc.getElementsByTagNameNS(NS, "S").length
     ? [...doc.getElementsByTagNameNS(NS, "S")]
@@ -56,6 +56,7 @@ function parseDashManifest(manifest) {
     const r = el.getAttribute("r");
     if (r) segmentCount += parseInt(r, 10);
   }
+  // Some manifests omit SegmentTimeline; fall back to one media segment.
   if (!segmentCount) segmentCount = 1;
 
   const baseUrl = (pick("BaseURL")?.textContent || "").trim();
@@ -983,7 +984,7 @@ function shouldTryQualityFallback(err) {
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
   if (msg.includes("not authenticated")) return false;
-  return /403|404|quality|not available|not found|unsupported|forbidden/.test(msg);
+  return /403|404|quality|not available|not found|unsupported/.test(msg);
 }
 
 async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress) {

@@ -1109,6 +1109,11 @@ export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameS
   let lastErr = null;
   while (attempt < 2) {
     try {
+      // Always re-fetch manifest and segments after token refresh
+      if (attempt === 1) {
+        // Wait a moment to ensure token is refreshed and available
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
       let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics } = await fetchTrackData(trackId, quality, onProgress);
 
       if (getMetadataEnable()) {
@@ -1133,7 +1138,7 @@ export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameS
     } catch (err) {
       lastErr = err;
       if (String(err).includes('token refresh triggered') && attempt === 0) {
-        // Retry after token refresh
+        // Retry after token refresh, ensuring manifest and segments are re-fetched
         attempt++;
         continue;
       }

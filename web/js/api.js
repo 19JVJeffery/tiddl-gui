@@ -124,16 +124,9 @@ async function fetchAllItems(fetchFn, pageSize = 50) {
   const total = hasKnownTotal ? first.totalNumberOfItems : null;
   let items = firstItems.slice();
 
-  const pageSignature = (pageItems) => {
-    // Handles both endpoint shapes:
-    // 1) flat items: { id, type, ... }
-    // 2) wrapped items: { type, item: { id, ... } }
-    const keys = pageItems
-      .map((it) => `${it?.type ?? ""}:${it?.item?.id ?? it?.id ?? ""}`)
-      .filter((k) => k !== ":");
-    if (!keys.length) return "";
-    return `${pageItems.length}|${keys.join("|")}`;
-  };
+  const pageSignature = (arr) => arr
+    .map((it) => `${it?.type ?? ""}:${it?.item?.id ?? it?.id ?? ""}`)
+    .join("|");
   let lastSignature = pageSignature(firstItems);
 
   let offset = items.length;
@@ -195,7 +188,6 @@ export async function getTrackStream(trackId, quality = "HIGH") {
     audioquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
-    nocache: Date.now(),
   });
 }
 
@@ -204,6 +196,5 @@ export async function getVideoStream(videoId, quality = "HIGH") {
     videoquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
-    nocache: Date.now(),
   });
 }

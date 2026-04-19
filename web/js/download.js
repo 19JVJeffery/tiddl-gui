@@ -39,29 +39,24 @@ function parseDashManifest(manifest) {
 
   const NS = "urn:mpeg:dash:schema:mpd:2011";
 
-  const nodes = (name) => {
-    const nsNodes = [...doc.getElementsByTagNameNS(NS, name)];
-    return nsNodes.length ? nsNodes : [...doc.getElementsByTagName(name)];
-  };
-  const pick = (name) => nodes(name)[0];
+  const pick = (name) =>
+    doc.getElementsByTagNameNS(NS, name)[0] || doc.getElementsByTagName(name)[0];
 
   const segTpl = pick("SegmentTemplate");
   const urlTemplate = segTpl?.getAttribute("media") || "";
   const initTemplate = segTpl?.getAttribute("initialization") || "";
-  const startNumber = parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1;
+  const startNumber = Math.max(parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1, 0);
 
-  const timeline = nodes("S");
+  const timeline = doc.getElementsByTagNameNS(NS, "S").length
+    ? [...doc.getElementsByTagNameNS(NS, "S")]
+    : [...doc.getElementsByTagName("S")];
   let segmentCount = 0;
   for (const el of timeline) {
     segmentCount += 1;
     const r = el.getAttribute("r");
     if (r) segmentCount += parseInt(r, 10);
   }
-  // Some manifests omit SegmentTimeline; fall back to one media segment.
-  if (!segmentCount) {
-    console.warn("DASH manifest missing SegmentTimeline; falling back to one segment.");
-    segmentCount = 1;
-  }
+  if (!segmentCount) segmentCount = 1;
 
   const baseUrl = (pick("BaseURL")?.textContent || "").trim();
   const resolveDashUrl = (u) => {
@@ -72,10 +67,9 @@ function parseDashManifest(manifest) {
       return u;
     }
   };
-  // Supports both DASH number templates: "$Number$" and "$Number%05d$".
-  const replaceNumber = (template, segmentNumber) =>
+  const replaceNumber = (template, n) =>
     template.replace(/\$Number(?:%0(\d+)d)?\$/g, (_, pad) =>
-      String(segmentNumber).padStart(pad ? parseInt(pad, 10) : 0, "0")
+      String(n).padStart(pad ? parseInt(pad, 10) : 0, "0")
     );
 
   const urls = [];
@@ -85,8 +79,12 @@ function parseDashManifest(manifest) {
     urls.push(resolveDashUrl(replaceNumber(urlTemplate, segmentNumber)));
   }
 
-  const representations = nodes("Representation");
-  const adaptationSets = nodes("AdaptationSet");
+  const representations = doc.getElementsByTagNameNS(NS, "Representation").length
+    ? [...doc.getElementsByTagNameNS(NS, "Representation")]
+    : [...doc.getElementsByTagName("Representation")];
+  const adaptationSets = doc.getElementsByTagNameNS(NS, "AdaptationSet").length
+    ? [...doc.getElementsByTagNameNS(NS, "AdaptationSet")]
+    : [...doc.getElementsByTagName("AdaptationSet")];
   const hasFlacCodec = representations.some((r) =>
     String(r.getAttribute("codecs") || "").toLowerCase().includes("flac")
   ) || adaptationSets.some((a) =>
@@ -126,12 +124,8 @@ async function fetchSegment(url) {
   try {
     const res = await fetch(url);
     if (res.ok) return res;
-    if (res.status === 403) {
-      console.error(`[tiddl] Segment direct fetch 403:`, url);
-    }
     // Non-2xx from CDN — fall through to proxy attempt
-  } catch (err) {
-    console.error(`[tiddl] Segment direct fetch error:`, url, err);
+  } catch {
     // Network / CORS error — fall through
   }
 
@@ -141,23 +135,11 @@ async function fetchSegment(url) {
     // Proxy not configured; nothing more to try
     throw new Error(`Segment fetch failed (no proxy configured): ${url}`);
   }
-  try {
-    const res2 = await fetch(proxiedUrl);
-    if (res2.ok) return res2;
-    if (res2.status === 403) {
-      console.error(`[tiddl] Segment proxy fetch 403:`, proxiedUrl);
-      // Try to refresh token and re-fetch segment manifest if possible
-      if (window.tiddlForceTokenRefresh) {
-        await window.tiddlForceTokenRefresh();
-        // Let the caller retry the download logic after token refresh
-        throw new Error(`Segment fetch failed: 403 (token may be expired, token refresh triggered)`);
-      }
-    }
+  const res2 = await fetch(proxiedUrl);
+  if (!res2.ok) {
     throw new Error(`Segment fetch failed: ${res2.status} ${url}`);
-  } catch (err) {
-    console.error(`[tiddl] Segment proxy fetch error:`, proxiedUrl, err);
-    throw err;
   }
+  return res2;
 }
 
 /**
@@ -170,18 +152,7 @@ async function fetchSegments(urls, onProgress) {
   const total = urls.length;
 
   for (const url of urls) {
-    let res;
-    try {
-      res = await fetchSegment(url);
-    } catch (err) {
-      // If token refresh was triggered, abort and let the caller handle retry
-      if (String(err).includes('token refresh triggered')) {
-        throw err;
-      }
-      // Otherwise, log and continue to next segment
-      console.error(`[tiddl] Segment fetch failed:`, url, err);
-      throw err;
-    }
+    const res = await fetchSegment(url);
     const buf = await res.arrayBuffer();
     chunks.push(new Uint8Array(buf));
     downloaded++;
@@ -1011,7 +982,7 @@ function shouldTryQualityFallback(err) {
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
   if (msg.includes("not authenticated")) return false;
-  return /403|404|quality|not available|not found|unsupported/.test(msg);
+  return /403|404|quality|not available|not found|unsupported|forbidden/.test(msg);
 }
 
 async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress) {
@@ -1022,13 +993,13 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
     const q = candidates[i];
     try {
       if (i > 0) {
-        onProgress?.(0.5, 1, `Retrying stream with fallback quality ${q} (attempt ${i + 1}/${candidates.length})…`);
+        onProgress?.(0, 1, `Requested quality unavailable, retrying with ${q}…`);
       }
       const streamInfo = await getTrackStream(trackId, q);
       return { streamInfo, quality: q };
     } catch (err) {
       lastErr = err;
-      if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) break;
+      if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
     }
   }
 
@@ -1045,7 +1016,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
  *             isrc: string, copyright: string, coverHash: string|null,
  *             lyrics: string|null }}
  */
-async function fetchTrackData(trackId, quality, onProgress, isRetry = false) {
+async function fetchTrackData(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
   const track = await getTrack(trackId);
   const rawTitle = (track.version ? `${track.title} (${track.version})` : track.title) || String(trackId);
@@ -1081,15 +1052,6 @@ async function fetchTrackData(trackId, quality, onProgress, isRetry = false) {
   const { streamInfo } = await getTrackStreamWithFallback(trackId, quality, onProgress);
   const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
 
-  // Debug: log manifest and segment URLs
-  if (isRetry) {
-    console.info('[tiddl] [RETRY] Manifest after token refresh:', streamInfo);
-    console.info('[tiddl] [RETRY] Segment URLs after token refresh:', urls);
-  } else {
-    console.info('[tiddl] Manifest:', streamInfo);
-    console.info('[tiddl] Segment URLs:', urls);
-  }
-
   if (encryptionType && encryptionType !== "NONE") {
     throw new Error(
       `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
@@ -1114,47 +1076,31 @@ async function fetchTrackData(trackId, quality, onProgress, isRetry = false) {
  * @returns {Promise<{filename: string, success: boolean, error?: string}>}
  */
 export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameSuffix = "") {
-  let attempt = 0;
-  let lastErr = null;
-  while (attempt < 2) {
-    try {
-      // Always re-fetch manifest and segments after token refresh
-      if (attempt === 1) {
-        // Wait a moment to ensure token is refreshed and available
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-      let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics } = await fetchTrackData(trackId, quality, onProgress, attempt === 1);
+  try {
+    let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics } = await fetchTrackData(trackId, quality, onProgress);
 
-      if (getMetadataEnable()) {
-        data = embedMetadata(data, extension, { title: rawTitle, artist: rawArtist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright, lyrics });
-      }
+    if (getMetadataEnable()) {
+      data = embedMetadata(data, extension, { title: rawTitle, artist: rawArtist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright, lyrics });
+    }
 
-      const needCover = (getMetadataCover() || (getCoverSave() && getCoverAllowed().includes("track"))) && coverHash;
-      if (needCover) {
-        onProgress?.(0, 1, "Fetching cover art…");
-        const cover = await fetchCoverArt(coverHash, getCoverSize());
-        if (cover) {
-          if (getMetadataCover()) data = embedCoverArt(data, extension, cover);
-          if (getCoverSave() && getCoverAllowed().includes("track")) {
-            triggerDownload(cover, "cover.jpg", "image/jpeg");
-          }
+    const needCover = (getMetadataCover() || (getCoverSave() && getCoverAllowed().includes("track"))) && coverHash;
+    if (needCover) {
+      onProgress?.(0, 1, "Fetching cover art…");
+      const cover = await fetchCoverArt(coverHash, getCoverSize());
+      if (cover) {
+        if (getMetadataCover()) data = embedCoverArt(data, extension, cover);
+        if (getCoverSave() && getCoverAllowed().includes("track")) {
+          triggerDownload(cover, "cover.jpg", "image/jpeg");
         }
       }
-
-      const filename = `${artist} - ${title}${nameSuffix}${extension}`;
-      triggerDownload(data, filename, extToMime(extension));
-      return { filename, success: true };
-    } catch (err) {
-      lastErr = err;
-      if (String(err).includes('token refresh triggered') && attempt === 0) {
-        // Retry after token refresh, ensuring manifest and segments are re-fetched
-        attempt++;
-        continue;
-      }
-      return { filename: String(trackId), success: false, error: err.message };
     }
+
+    const filename = `${artist} - ${title}${nameSuffix}${extension}`;
+    triggerDownload(data, filename, extToMime(extension));
+    return { filename, success: true };
+  } catch (err) {
+    return { filename: String(trackId), success: false, error: err.message };
   }
-  return { filename: String(trackId), success: false, error: lastErr ? lastErr.message : 'Unknown error' };
 }
 
 /**

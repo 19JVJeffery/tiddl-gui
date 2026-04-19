@@ -82,7 +82,7 @@ To use a different proxy, open **Settings** and update the **Proxy prefix URL** 
   The downloader now avoids inappropriate quality-tier downgrades on generic 403 errors and only falls back when the quality itself is unavailable.
 
 - **`Segment fetch failed: 403` (especially on FLAC/HiFi/Max)**  
-  Segment URLs are short-lived. The app now retries once by reacquiring stream info (fresh segment URLs) before failing.
+  Segment URLs are short-lived and can be bound to the IP that requested playback info. The app now prefers direct playback-info requests (with proxy fallback only when needed) and still retries once with fresh segment URLs before failing.
 
 ## Run locally
 

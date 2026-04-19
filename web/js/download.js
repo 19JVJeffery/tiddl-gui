@@ -1032,7 +1032,9 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
         includeRequestMeta: true,
       });
       const streamInfo = streamRes?.data ?? streamRes;
-      const requestMeta = streamRes?.requestMeta ?? { usedProxy: false };
+      const requestMeta = (streamRes && typeof streamRes === "object" && streamRes.requestMeta)
+        ? streamRes.requestMeta
+        : { usedProxy: false };
       return { streamInfo, quality: q, requestMeta };
     } catch (err) {
       lastErr = err;
@@ -1046,6 +1048,10 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
 function isSegmentTokenExpiryError(err) {
   const msg = String(err?.message || "").toLowerCase();
   return /segment fetch failed: (401|403|410)\b|direct=(401|403|410)\b/.test(msg);
+}
+
+function getSegmentStrategyFromRequestMeta(requestMeta) {
+  return requestMeta.usedProxy ? "proxy-then-direct" : "direct-then-proxy";
 }
 
 /**
@@ -1093,7 +1099,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
   const initial = await getTrackStreamWithFallback(trackId, quality, onProgress);
   let streamQuality = initial.quality;
-  let segmentStrategy = initial.requestMeta.usedProxy ? "proxy-then-direct" : "direct-then-proxy";
+  let segmentStrategy = getSegmentStrategyFromRequestMeta(initial.requestMeta);
   let { urls, extension, encryptionType } = parseStreamManifest(initial.streamInfo);
 
   if (encryptionType && encryptionType !== "NONE") {
@@ -1123,7 +1129,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
     onProgress?.(0, 1, "Segment URL expired (401/403/410). Refreshing stream token and retrying once…");
     const refreshed = await getTrackStreamWithFallback(trackId, streamQuality, onProgress);
     streamQuality = refreshed.quality;
-    segmentStrategy = refreshed.requestMeta.usedProxy ? "proxy-then-direct" : "direct-then-proxy";
+    segmentStrategy = getSegmentStrategyFromRequestMeta(refreshed.requestMeta);
     const reparsed = parseStreamManifest(refreshed.streamInfo);
     urls = reparsed.urls;
     extension = reparsed.extension;
@@ -1138,7 +1144,10 @@ async function fetchTrackData(trackId, quality, onProgress) {
     } catch (retryErr) {
       if (!isSegmentTokenExpiryError(retryErr)) throw retryErr;
 
-      onProgress?.(0, 1, "Segment still failing with proxy-backed stream. Retrying with direct-only playback request…");
+      const directRetryMessage = segmentStrategy === "proxy-then-direct" || segmentStrategy === "proxy-only"
+        ? "Segment still failing with proxy-backed stream. Retrying with direct-only playback request…"
+        : "Segment still failing after stream refresh. Retrying with direct-only playback request…";
+      onProgress?.(0, 1, directRetryMessage);
       const directOnly = await getTrackStreamWithFallback(trackId, streamQuality, onProgress, {
         allowProxyFallback: false,
       });

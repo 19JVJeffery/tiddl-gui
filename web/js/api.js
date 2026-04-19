@@ -258,10 +258,11 @@ export async function getTrackStream(trackId, quality = "HIGH", options = {}) {
     allowProxyFallback = true,
     includeRequestMeta = false,
     preferDirect = true,
+    playbackMode = "STREAM",
   } = options;
   return apiFetch(`tracks/${trackId}/playbackinfopostpaywall`, {
     audioquality: quality,
-    playbackmode: "OFFLINE",
+    playbackmode: playbackMode,
     assetpresentation: "FULL",
   }, { preferDirect, allowProxyFallback, includeRequestMeta });
 }
@@ -271,10 +272,11 @@ export async function getVideoStream(videoId, quality = "HIGH", options = {}) {
     allowProxyFallback = true,
     includeRequestMeta = false,
     preferDirect = true,
+    playbackMode = "STREAM",
   } = options;
   return apiFetch(`videos/${videoId}/playbackinfopostpaywall`, {
     videoquality: quality,
-    playbackmode: "OFFLINE",
+    playbackmode: playbackMode,
     assetpresentation: "FULL",
   }, { preferDirect, allowProxyFallback, includeRequestMeta });
 }

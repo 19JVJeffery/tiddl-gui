@@ -125,6 +125,9 @@ async function fetchAllItems(fetchFn, pageSize = 50) {
   let items = firstItems.slice();
 
   const pageSignature = (arr) => arr
+    // Handles both endpoint shapes:
+    // 1) flat items: { id, type, ... }
+    // 2) wrapped items: { type, item: { id, ... } }
     .map((it) => `${it?.type ?? ""}:${it?.item?.id ?? it?.id ?? ""}`)
     .join("|");
   let lastSignature = pageSignature(firstItems);

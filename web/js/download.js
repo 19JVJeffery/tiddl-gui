@@ -45,7 +45,7 @@ function parseDashManifest(manifest) {
   const segTpl = pick("SegmentTemplate");
   const urlTemplate = segTpl?.getAttribute("media") || "";
   const initTemplate = segTpl?.getAttribute("initialization") || "";
-  const startNumber = Math.max(parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1, 0);
+  const startNumber = Math.max(parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1, 1);
 
   const timeline = doc.getElementsByTagNameNS(NS, "S").length
     ? [...doc.getElementsByTagNameNS(NS, "S")]
@@ -67,6 +67,7 @@ function parseDashManifest(manifest) {
       return u;
     }
   };
+  // Supports both DASH number templates: "$Number$" and "$Number%05d$".
   const replaceNumber = (template, n) =>
     template.replace(/\$Number(?:%0(\d+)d)?\$/g, (_, pad) =>
       String(n).padStart(pad ? parseInt(pad, 10) : 0, "0")
@@ -993,7 +994,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
     const q = candidates[i];
     try {
       if (i > 0) {
-        onProgress?.(0, 1, `Requested quality unavailable, retrying with ${q}…`);
+        onProgress?.(0, 1, `${i === 1 ? "Requested" : "Previous"} quality unavailable, retrying with ${q}…`);
       }
       const streamInfo = await getTrackStream(trackId, q);
       return { streamInfo, quality: q };

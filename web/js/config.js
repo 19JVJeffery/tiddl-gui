@@ -35,7 +35,7 @@ export function setClientSecret(v) {
 
 /** CORS proxy prefix — every request to Tidal is sent through this URL. */
 export function getCorsProxy() {
-  return localStorage.getItem("tiddl_cors_proxy") ?? "https://thingproxy.freeboard.io/fetch/";
+  return localStorage.getItem("tiddl_cors_proxy") ?? "https://corsproxy.io/?url=";
 }
 export function setCorsProxy(v) {
   localStorage.setItem("tiddl_cors_proxy", v);
@@ -45,11 +45,12 @@ export function setCorsProxy(v) {
 export function proxied(url) {
   const proxy = getCorsProxy().trim();
   if (!proxy) return url;
-  // thingproxy expects the raw URL, not encoded
-  if (proxy.includes('thingproxy.freeboard.io/fetch/')) {
-    return proxy + url;
+  // corsproxy.io expects the URL to be encoded as a query param
+  if (proxy.includes('corsproxy.io')) {
+    return proxy + encodeURIComponent(url);
   }
-  return proxy + encodeURIComponent(url);
+  // fallback: just append raw
+  return proxy + url;
 }
 
 // ─── Appearance ───────────────────────────────────────────────────────────────

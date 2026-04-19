@@ -870,60 +870,12 @@ function expandStatusBar() {
 
 async function handleDownload() {
 
-  // Always force logout and re-login before download for fresh manifest/tokens
-  appendLog("Logging out to start a fresh session for download...", "info");
-  await logout();
 
-  appendLog("Requesting new device login...", "info");
-  const loginStatus = $("login-status");
-  let deviceAuth;
-  try {
-    deviceAuth = await getDeviceAuth();
-  } catch (err) {
-    appendLog("Failed to start device login: " + (err.message || err), "error");
+  if (!isLoggedIn()) {
+    appendLog("You must be logged in to download.", "error");
     activateTab("auth");
     return;
   }
-  const uri = `https://${deviceAuth.verificationUriComplete}`;
-  appendLog("Please approve login in the new tab that opens...", "info");
-  window.open(uri, "_blank");
-
-  // Poll for device approval
-  let authResponse = null;
-  const endAt = Date.now() + deviceAuth.expiresIn * 1000;
-  while (!authResponse && Date.now() < endAt) {
-    try {
-      authResponse = await pollDeviceAuth(deviceAuth.deviceCode);
-    } catch (err) {
-      if (err?.status === 400 && err?.error === "authorization_pending") {
-        await new Promise(r => setTimeout(r, deviceAuth.interval * 1000));
-        continue;
-      } else if (err?.error === "expired_token") {
-        appendLog("Device code expired. Try again.", "error");
-        activateTab("auth");
-        return;
-      } else {
-        appendLog("Login failed: " + (err.message || err), "error");
-        activateTab("auth");
-        return;
-      }
-    }
-  }
-  if (!authResponse) {
-    appendLog("Login timed out. Try again.", "error");
-    activateTab("auth");
-    return;
-  }
-  saveAuth({
-    token: authResponse.access_token,
-    refresh_token: authResponse.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + authResponse.expires_in,
-    user_id: String(authResponse.user_id),
-    country_code: authResponse.user?.countryCode || "US",
-    username: authResponse.user?.username || authResponse.user?.email || "User",
-  });
-  appendLog("Logged in successfully! Starting download...", "success");
-  updateAuthBadge();
 
   // Flush any half-typed pill input
   const pilInput = $("url-pill-input");

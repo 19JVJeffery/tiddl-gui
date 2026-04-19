@@ -1105,31 +1105,42 @@ async function fetchTrackData(trackId, quality, onProgress) {
  * @returns {Promise<{filename: string, success: boolean, error?: string}>}
  */
 export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameSuffix = "") {
-  try {
-    let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics } = await fetchTrackData(trackId, quality, onProgress);
+  let attempt = 0;
+  let lastErr = null;
+  while (attempt < 2) {
+    try {
+      let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics } = await fetchTrackData(trackId, quality, onProgress);
 
-    if (getMetadataEnable()) {
-      data = embedMetadata(data, extension, { title: rawTitle, artist: rawArtist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright, lyrics });
-    }
+      if (getMetadataEnable()) {
+        data = embedMetadata(data, extension, { title: rawTitle, artist: rawArtist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright, lyrics });
+      }
 
-    const needCover = (getMetadataCover() || (getCoverSave() && getCoverAllowed().includes("track"))) && coverHash;
-    if (needCover) {
-      onProgress?.(0, 1, "Fetching cover art…");
-      const cover = await fetchCoverArt(coverHash, getCoverSize());
-      if (cover) {
-        if (getMetadataCover()) data = embedCoverArt(data, extension, cover);
-        if (getCoverSave() && getCoverAllowed().includes("track")) {
-          triggerDownload(cover, "cover.jpg", "image/jpeg");
+      const needCover = (getMetadataCover() || (getCoverSave() && getCoverAllowed().includes("track"))) && coverHash;
+      if (needCover) {
+        onProgress?.(0, 1, "Fetching cover art…");
+        const cover = await fetchCoverArt(coverHash, getCoverSize());
+        if (cover) {
+          if (getMetadataCover()) data = embedCoverArt(data, extension, cover);
+          if (getCoverSave() && getCoverAllowed().includes("track")) {
+            triggerDownload(cover, "cover.jpg", "image/jpeg");
+          }
         }
       }
-    }
 
-    const filename = `${artist} - ${title}${nameSuffix}${extension}`;
-    triggerDownload(data, filename, extToMime(extension));
-    return { filename, success: true };
-  } catch (err) {
-    return { filename: String(trackId), success: false, error: err.message };
+      const filename = `${artist} - ${title}${nameSuffix}${extension}`;
+      triggerDownload(data, filename, extToMime(extension));
+      return { filename, success: true };
+    } catch (err) {
+      lastErr = err;
+      if (String(err).includes('token refresh triggered') && attempt === 0) {
+        // Retry after token refresh
+        attempt++;
+        continue;
+      }
+      return { filename: String(trackId), success: false, error: err.message };
+    }
   }
+  return { filename: String(trackId), success: false, error: lastErr ? lastErr.message : 'Unknown error' };
 }
 
 /**

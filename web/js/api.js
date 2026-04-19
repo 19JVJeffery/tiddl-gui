@@ -124,7 +124,7 @@ async function fetchAllItems(fetchFn, pageSize = 50) {
   const total = hasKnownTotal ? first.totalNumberOfItems : null;
   let items = firstItems.slice();
 
-  const pageSignature = (arr) => arr
+  const pageSignature = (pageItems) => pageItems
     // Handles both endpoint shapes:
     // 1) flat items: { id, type, ... }
     // 2) wrapped items: { type, item: { id, ... } }

@@ -69,9 +69,9 @@ function parseDashManifest(manifest) {
     }
   };
   // Supports both DASH number templates: "$Number$" and "$Number%05d$".
-  const replaceNumber = (template, n) =>
+  const replaceNumber = (template, segmentNumber) =>
     template.replace(/\$Number(?:%0(\d+)d)?\$/g, (_, pad) =>
-      String(n).padStart(pad ? parseInt(pad, 10) : 0, "0")
+      String(segmentNumber).padStart(pad ? parseInt(pad, 10) : 0, "0")
     );
 
   const urls = [];
@@ -995,7 +995,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
     const q = candidates[i];
     try {
       if (i > 0) {
-        onProgress?.(0, 1, `${i === 1 ? "Requested" : "Previous"} quality unavailable, retrying with ${q}…`);
+        onProgress?.(0, 1, `Retrying stream with fallback quality ${q} (attempt ${i + 1}/${candidates.length})…`);
       }
       const streamInfo = await getTrackStream(trackId, q);
       return { streamInfo, quality: q };

@@ -35,7 +35,7 @@ export function setClientSecret(v) {
 
 /** CORS proxy prefix — every request to Tidal is sent through this URL. */
 export function getCorsProxy() {
-  return localStorage.getItem("tiddl_cors_proxy") ?? "https://corsproxy.io/?url=";
+  return localStorage.getItem("tiddl_cors_proxy") ?? "https://thingproxy.freeboard.io/fetch/";
 }
 export function setCorsProxy(v) {
   localStorage.setItem("tiddl_cors_proxy", v);

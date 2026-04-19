@@ -2,10 +2,16 @@
  * tiddl-web — Tidal API client
  *
  * Thin wrapper around api.tidal.com/v1 — mirrors the Python TidalAPI class.
+ *
+ * All requests now use proxyFetch (config.js) so they benefit from:
+ *  - AbortController-based timeouts (API_TIMEOUT_MS, default 30 s)
+ *  - Automatic retry with exponential back-off (×2 extra attempts)
+ *  - Consistent error normalization via TiddlError
  */
 
-import { API_URL, proxied } from "./config.js";
+import { API_URL, proxyFetch } from "./config.js";
 import { getValidToken, loadAuth, refreshToken } from "./auth.js";
+import { API_TIMEOUT_MS } from "./http.js";
 
 /**
  * Safety guard for paginated endpoints.
@@ -17,63 +23,50 @@ const MAX_PAGINATION_PAGES = 2000;
 
 async function apiFetch(endpoint, params = {}, options = {}) {
   const {
-    preferDirect = false,
+    preferDirect       = false,
     allowProxyFallback = true,
     includeRequestMeta = false,
   } = options;
+
   const auth = loadAuth();
   const defaultParams = { countryCode: auth?.country_code || "US" };
   const merged = { ...defaultParams, ...params };
 
-  const qs = new URLSearchParams(merged).toString();
+  const qs  = new URLSearchParams(merged).toString();
   const url = `${API_URL}/${endpoint}?${qs}`;
 
-  async function doRequest(token, useProxy = true) {
-    const targetUrl = useProxy ? proxied(url) : url;
-    const res = await fetch(targetUrl, {
+  // Map the caller's preference flags to a proxyFetch strategy string.
+  const strategy = preferDirect
+    ? (allowProxyFallback ? "direct-then-proxy" : "direct-only")
+    : "proxy-only";
+
+  async function doRequest(token) {
+    const { res, usedProxy } = await proxyFetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
       credentials: "omit",
-    });
-    let json = {};
-    try {
-      json = await res.json();
-    } catch {
-      json = {};
-    }
-    return { res, json, usedProxy: useProxy };
-  }
+    }, { strategy, timeoutMs: API_TIMEOUT_MS, retries: 2 });
 
-  async function doPreferredRequest(token) {
-    if (!preferDirect) return doRequest(token, true);
-    try {
-      return await doRequest(token, false);
-    } catch (err) {
-      if (!allowProxyFallback) throw err;
-      const msg = String(err?.message || "").toLowerCase();
-      const shouldFallbackToProxy = err instanceof TypeError
-        || /failed to fetch|networkerror|network error|load failed|cors|cross-origin/.test(msg);
-      if (!shouldFallbackToProxy) throw err;
-      // Some environments block direct API CORS requests; fall back to proxy.
-      return doRequest(token, true);
-    }
+    let json = {};
+    try { json = await res.json(); } catch { /* empty body */ }
+    return { res, json, usedProxy };
   }
 
   let token = await getValidToken();
   if (!token) throw new Error("Not authenticated");
 
-  let { res, json, usedProxy } = await doPreferredRequest(token);
+  let { res, json, usedProxy } = await doRequest(token);
+
+  // Auto-refresh the access token on 401 / 403 and retry once.
   if (!res.ok && (res.status === 401 || res.status === 403)) {
     try {
       const refreshed = await refreshToken();
       token = refreshed?.token;
-      if (token) {
-        ({ res, json, usedProxy } = await doPreferredRequest(token));
-      }
+      if (token) ({ res, json, usedProxy } = await doRequest(token));
     } catch {
-      // Keep original error handling below.
+      /* keep original error below */
     }
   }
 
@@ -81,6 +74,7 @@ async function apiFetch(endpoint, params = {}, options = {}) {
     const msg = json?.userMessage || json?.error_description || `HTTP ${res.status}`;
     throw new Error(msg);
   }
+
   if (includeRequestMeta) {
     return { data: json, requestMeta: { usedProxy: Boolean(usedProxy) } };
   }

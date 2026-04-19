@@ -1045,7 +1045,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
  *             isrc: string, copyright: string, coverHash: string|null,
  *             lyrics: string|null }}
  */
-async function fetchTrackData(trackId, quality, onProgress) {
+async function fetchTrackData(trackId, quality, onProgress, isRetry = false) {
   onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
   const track = await getTrack(trackId);
   const rawTitle = (track.version ? `${track.title} (${track.version})` : track.title) || String(trackId);
@@ -1082,7 +1082,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
   const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
 
   // Debug: log manifest and segment URLs
-  if (attempt && attempt > 0) {
+  if (isRetry) {
     console.info('[tiddl] [RETRY] Manifest after token refresh:', streamInfo);
     console.info('[tiddl] [RETRY] Segment URLs after token refresh:', urls);
   } else {
@@ -1123,7 +1123,7 @@ export async function downloadTrack(trackId, quality = "HIGH", onProgress, nameS
         // Wait a moment to ensure token is refreshed and available
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
-      let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics } = await fetchTrackData(trackId, quality, onProgress);
+      let { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics } = await fetchTrackData(trackId, quality, onProgress, attempt === 1);
 
       if (getMetadataEnable()) {
         data = embedMetadata(data, extension, { title: rawTitle, artist: rawArtist, albumTitle, albumArtist, trackNumber, discNumber, year, isrc, copyright, lyrics });

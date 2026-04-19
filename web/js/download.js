@@ -126,8 +126,12 @@ async function fetchSegment(url) {
   try {
     const res = await fetch(url);
     if (res.ok) return res;
+    if (res.status === 403) {
+      console.error(`[tiddl] Segment direct fetch 403:`, url);
+    }
     // Non-2xx from CDN — fall through to proxy attempt
-  } catch {
+  } catch (err) {
+    console.error(`[tiddl] Segment direct fetch error:`, url, err);
     // Network / CORS error — fall through
   }
 
@@ -137,11 +141,23 @@ async function fetchSegment(url) {
     // Proxy not configured; nothing more to try
     throw new Error(`Segment fetch failed (no proxy configured): ${url}`);
   }
-  const res2 = await fetch(proxiedUrl);
-  if (!res2.ok) {
+  try {
+    const res2 = await fetch(proxiedUrl);
+    if (res2.ok) return res2;
+    if (res2.status === 403) {
+      console.error(`[tiddl] Segment proxy fetch 403:`, proxiedUrl);
+      // Try to refresh token and re-fetch segment manifest if possible
+      if (window.tiddlForceTokenRefresh) {
+        await window.tiddlForceTokenRefresh();
+        // Let the caller retry the download logic after token refresh
+        throw new Error(`Segment fetch failed: 403 (token may be expired, token refresh triggered)`);
+      }
+    }
     throw new Error(`Segment fetch failed: ${res2.status} ${url}`);
+  } catch (err) {
+    console.error(`[tiddl] Segment proxy fetch error:`, proxiedUrl, err);
+    throw err;
   }
-  return res2;
 }
 
 /**
@@ -154,7 +170,18 @@ async function fetchSegments(urls, onProgress) {
   const total = urls.length;
 
   for (const url of urls) {
-    const res = await fetchSegment(url);
+    let res;
+    try {
+      res = await fetchSegment(url);
+    } catch (err) {
+      // If token refresh was triggered, abort and let the caller handle retry
+      if (String(err).includes('token refresh triggered')) {
+        throw err;
+      }
+      // Otherwise, log and continue to next segment
+      console.error(`[tiddl] Segment fetch failed:`, url, err);
+      throw err;
+    }
     const buf = await res.arrayBuffer();
     chunks.push(new Uint8Array(buf));
     downloaded++;

@@ -173,3 +173,15 @@ export async function getValidToken() {
   }
   return loadAuth().token;
 }
+
+// Expose a global function to force token refresh (for download error recovery)
+if (typeof window !== 'undefined') {
+  window.tiddlForceTokenRefresh = async () => {
+    try {
+      await refreshToken();
+      console.info('[tiddl] Token refreshed via tiddlForceTokenRefresh');
+    } catch (err) {
+      console.error('[tiddl] Token refresh failed:', err);
+    }
+  };
+}

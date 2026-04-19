@@ -119,16 +119,27 @@ export async function getUserPlaylists(limit = 50, offset = 0) {
  */
 async function fetchAllItems(fetchFn, pageSize = 50) {
   const first = await fetchFn(pageSize, 0);
-  const total = first.totalNumberOfItems ?? (first.items?.length ?? 0);
-  let items = first.items ?? [];
+  const firstItems = Array.isArray(first.items) ? first.items : [];
+  const hasKnownTotal = Number.isFinite(first.totalNumberOfItems);
+  const total = hasKnownTotal ? first.totalNumberOfItems : null;
+  let items = firstItems.slice();
+
+  const pageSignature = (arr) => arr
+    .map((it) => `${it?.type ?? ""}:${it?.item?.id ?? it?.id ?? ""}`)
+    .join("|");
+  let lastSignature = pageSignature(firstItems);
 
   let offset = items.length;
-  while (offset < total) {
+  while (!hasKnownTotal || offset < total) {
     const page = await fetchFn(pageSize, offset);
-    const pageItems = page.items ?? [];
+    const pageItems = Array.isArray(page.items) ? page.items : [];
     if (!pageItems.length) break;
+    const signature = pageSignature(pageItems);
+    if (!hasKnownTotal && signature && signature === lastSignature) break;
     items = items.concat(pageItems);
+    lastSignature = signature;
     offset += pageItems.length;
+    if (!hasKnownTotal && pageItems.length < pageSize) break;
   }
 
   return items;

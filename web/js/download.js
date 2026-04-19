@@ -22,8 +22,8 @@ function parseBtsManifest(manifest) {
   const decoded = atob(manifest);
   const data = JSON.parse(decoded);
 
-  let extension = ".m4a";
-  if (data.codecs === "flac") extension = ".flac";
+  const codecs = String(data.codecs || "").toLowerCase();
+  const extension = codecs.includes("flac") ? ".flac" : ".m4a";
 
   return { urls: data.urls, extension, encryptionType: data.encryptionType };
 }
@@ -39,27 +39,59 @@ function parseDashManifest(manifest) {
 
   const NS = "urn:mpeg:dash:schema:mpd:2011";
 
-  const segTpl = doc.getElementsByTagNameNS(NS, "SegmentTemplate")[0];
-  const urlTemplate = segTpl?.getAttribute("media") || "";
+  const pick = (name) =>
+    doc.getElementsByTagNameNS(NS, name)[0] || doc.getElementsByTagName(name)[0];
 
-  const timeline = doc.getElementsByTagNameNS(NS, "S");
-  let total = 0;
+  const segTpl = pick("SegmentTemplate");
+  const urlTemplate = segTpl?.getAttribute("media") || "";
+  const initTemplate = segTpl?.getAttribute("initialization") || "";
+  const startNumber = Math.max(parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1, 0);
+
+  const timeline = doc.getElementsByTagNameNS(NS, "S").length
+    ? [...doc.getElementsByTagNameNS(NS, "S")]
+    : [...doc.getElementsByTagName("S")];
+  let segmentCount = 0;
   for (const el of timeline) {
-    total += 1;
+    segmentCount += 1;
     const r = el.getAttribute("r");
-    if (r) total += parseInt(r, 10);
+    if (r) segmentCount += parseInt(r, 10);
   }
+  if (!segmentCount) segmentCount = 1;
+
+  const baseUrl = (pick("BaseURL")?.textContent || "").trim();
+  const resolveDashUrl = (u) => {
+    if (!u) return "";
+    try {
+      return new URL(u, baseUrl || window.location.href).toString();
+    } catch {
+      return u;
+    }
+  };
+  const replaceNumber = (template, n) =>
+    template.replace(/\$Number(?:%0(\d+)d)?\$/g, (_, pad) =>
+      String(n).padStart(pad ? parseInt(pad, 10) : 0, "0")
+    );
 
   const urls = [];
-  // Segments are $Number$-indexed starting at 0 through `total` inclusive,
-  // matching the Python parse_manifest_XML: range(0, total + 1).
-  for (let i = 0; i <= total; i++) {
-    urls.push(urlTemplate.replace("$Number$", String(i)));
+  if (initTemplate) urls.push(resolveDashUrl(initTemplate));
+  for (let i = 0; i < segmentCount; i++) {
+    const segmentNumber = startNumber + i;
+    urls.push(resolveDashUrl(replaceNumber(urlTemplate, segmentNumber)));
   }
 
-  // MPEG-DASH always delivers segments in ISO BMFF (fMP4) containers,
-  // regardless of the audio codec. Use .m4a for all DASH streams.
-  return { urls, extension: ".m4a", encryptionType: "NONE" };
+  const representations = doc.getElementsByTagNameNS(NS, "Representation").length
+    ? [...doc.getElementsByTagNameNS(NS, "Representation")]
+    : [...doc.getElementsByTagName("Representation")];
+  const adaptationSets = doc.getElementsByTagNameNS(NS, "AdaptationSet").length
+    ? [...doc.getElementsByTagNameNS(NS, "AdaptationSet")]
+    : [...doc.getElementsByTagName("AdaptationSet")];
+  const hasFlacCodec = representations.some((r) =>
+    String(r.getAttribute("codecs") || "").toLowerCase().includes("flac")
+  ) || adaptationSets.some((a) =>
+    String(a.getAttribute("mimeType") || "").toLowerCase().includes("flac")
+  );
+
+  return { urls, extension: hasFlacCodec ? ".flac" : ".m4a", encryptionType: "NONE" };
 }
 
 function parseStreamManifest(streamInfo) {
@@ -933,6 +965,47 @@ function buildZip(files) {
 
 // ─── Internal track data fetcher ─────────────────────────────────────────
 
+const QUALITY_FALLBACKS = {
+  HI_RES_LOSSLESS: ["LOSSLESS", "HIGH", "LOW"],
+  LOSSLESS: ["HI_RES_LOSSLESS", "HIGH", "LOW"],
+  HIGH: ["LOW"],
+  LOW: [],
+};
+
+function qualityCandidates(requestedQuality) {
+  const requested = requestedQuality || "HIGH";
+  const fallbacks = QUALITY_FALLBACKS[requested] || [];
+  return [requested, ...fallbacks.filter((q) => q !== requested)];
+}
+
+function shouldTryQualityFallback(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  if (!msg) return false;
+  if (msg.includes("not authenticated")) return false;
+  return /403|404|quality|not available|not found|unsupported|forbidden/.test(msg);
+}
+
+async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress) {
+  const candidates = qualityCandidates(requestedQuality);
+  let lastErr = null;
+
+  for (let i = 0; i < candidates.length; i++) {
+    const q = candidates[i];
+    try {
+      if (i > 0) {
+        onProgress?.(0, 1, `Requested quality unavailable, retrying with ${q}…`);
+      }
+      const streamInfo = await getTrackStream(trackId, q);
+      return { streamInfo, quality: q };
+    } catch (err) {
+      lastErr = err;
+      if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
+    }
+  }
+
+  throw lastErr || new Error("Unable to fetch track stream");
+}
+
 /**
  * Fetch and decode a single track's audio data without triggering a browser
  * save.  Used internally by downloadTrack and the multi-track ZIP bundlers.
@@ -976,7 +1049,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
   }
 
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
-  const streamInfo = await getTrackStream(trackId, quality);
+  const { streamInfo } = await getTrackStreamWithFallback(trackId, quality, onProgress);
   const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
 
   if (encryptionType && encryptionType !== "NONE") {

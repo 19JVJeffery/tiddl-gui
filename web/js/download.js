@@ -1015,17 +1015,30 @@ const QUALITY_FALLBACKS = {
   LOW: [],
 };
 
+const PLAYBACK_NOT_READY_RETRIES = 3;
+const PLAYBACK_NOT_READY_RETRY_BASE_DELAY_MS = 1200;
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function qualityCandidates(requestedQuality) {
   const requested = requestedQuality || "HIGH";
   const fallbacks = QUALITY_FALLBACKS[requested] || [];
   return [requested, ...fallbacks.filter((q) => q !== requested)];
 }
 
+function isPlaybackAssetNotReadyError(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  return /asset is not ready for playback|asset not ready for playback/.test(msg);
+}
+
 function shouldTryQualityFallback(err) {
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
   if (/not authenticated|unauthorized|token/.test(msg)) return false;
-  return /\b(?:quality|audioquality|unsupported|subscription|plan)\b|not available\b/.test(msg);
+  return /\b(?:quality|audioquality|unsupported|subscription|plan)\b|not available\b/.test(msg)
+    || isPlaybackAssetNotReadyError(err);
 }
 
 async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress, options = {}) {
@@ -1038,25 +1051,38 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
 
   for (let i = 0; i < candidates.length; i++) {
     const q = candidates[i];
-    try {
-      if (i > 0) {
-        onProgress?.(0, 1, `Requested quality unavailable, retrying with ${q}…`);
+    for (let attempt = 0; attempt <= PLAYBACK_NOT_READY_RETRIES; attempt++) {
+      try {
+        if (i > 0 && attempt === 0) {
+          onProgress?.(0, 1, `Requested quality unavailable, retrying with ${q}…`);
+        }
+        const streamRes = await getTrackStream(trackId, q, {
+          allowProxyFallback,
+          includeRequestMeta: true,
+          preferDirect,
+        });
+        const streamInfo = streamRes?.data ?? streamRes;
+        // `includeRequestMeta` is always requested above; default only as a guard
+        // against unexpected response-shape changes.
+        const requestMeta = (streamRes && typeof streamRes === "object" && streamRes.requestMeta)
+          ? streamRes.requestMeta
+          : { usedProxy: false };
+        return { streamInfo, quality: q, requestMeta };
+      } catch (err) {
+        lastErr = err;
+        if (isPlaybackAssetNotReadyError(err) && attempt < PLAYBACK_NOT_READY_RETRIES) {
+          const retryDelayMs = PLAYBACK_NOT_READY_RETRY_BASE_DELAY_MS * (attempt + 1);
+          onProgress?.(
+            0,
+            1,
+            `Asset not ready yet; retrying stream request in ${(retryDelayMs / 1000).toFixed(1)}s (${attempt + 1}/${PLAYBACK_NOT_READY_RETRIES})…`
+          );
+          await wait(retryDelayMs);
+          continue;
+        }
+        if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
+        break;
       }
-      const streamRes = await getTrackStream(trackId, q, {
-        allowProxyFallback,
-        includeRequestMeta: true,
-        preferDirect,
-      });
-      const streamInfo = streamRes?.data ?? streamRes;
-      // `includeRequestMeta` is always requested above; default only as a guard
-      // against unexpected response-shape changes.
-      const requestMeta = (streamRes && typeof streamRes === "object" && streamRes.requestMeta)
-        ? streamRes.requestMeta
-        : { usedProxy: false };
-      return { streamInfo, quality: q, requestMeta };
-    } catch (err) {
-      lastErr = err;
-      if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
     }
   }
 

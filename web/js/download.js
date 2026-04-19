@@ -1032,6 +1032,8 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
         includeRequestMeta: true,
       });
       const streamInfo = streamRes?.data ?? streamRes;
+      // `includeRequestMeta` is always requested above; default only as a guard
+      // against unexpected response-shape changes.
       const requestMeta = (streamRes && typeof streamRes === "object" && streamRes.requestMeta)
         ? streamRes.requestMeta
         : { usedProxy: false };
@@ -1144,10 +1146,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
     } catch (retryErr) {
       if (!isSegmentTokenExpiryError(retryErr)) throw retryErr;
 
-      const directRetryMessage = segmentStrategy === "proxy-then-direct" || segmentStrategy === "proxy-only"
-        ? "Segment still failing with proxy-backed stream. Retrying with direct-only playback request…"
-        : "Segment still failing after stream refresh. Retrying with direct-only playback request…";
-      onProgress?.(0, 1, directRetryMessage);
+      onProgress?.(0, 1, "Segment still failing after stream refresh. Retrying with direct-only playback request…");
       const directOnly = await getTrackStreamWithFallback(trackId, streamQuality, onProgress, {
         allowProxyFallback: false,
       });

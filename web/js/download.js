@@ -1055,6 +1055,7 @@ const QUALITY_FALLBACKS = {
 const PLAYBACK_NOT_READY_RETRIES = 3;
 const PLAYBACK_NOT_READY_RETRY_BASE_DELAY_MS = 1200;
 const TRACK_PLAYBACK_MODE_CANDIDATES = ["STREAM", "OFFLINE"];
+const TRACK_DOWNLOAD_ALGORITHM_ATTEMPTS = 2;
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1190,7 +1191,7 @@ function getSegmentStrategyFromRequestMeta(requestMeta) {
  *             isrc: string, copyright: string, coverHash: string|null,
  *             lyrics: string|null }}
  */
-async function fetchTrackData(trackId, quality, onProgress) {
+async function fetchTrackDataOnce(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Fetching track info for #${trackId}…`);
   const track = await getTrack(trackId);
   const rawTitle = (track.version ? `${track.title} (${track.version})` : track.title) || String(trackId);
@@ -1291,6 +1292,26 @@ async function fetchTrackData(trackId, quality, onProgress) {
   }
 
   return { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics };
+}
+
+async function fetchTrackData(trackId, quality, onProgress) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= TRACK_DOWNLOAD_ALGORITHM_ATTEMPTS; attempt++) {
+    try {
+      if (attempt > 1) {
+        onProgress?.(
+          0,
+          1,
+          `Retrying download from the start (${attempt}/${TRACK_DOWNLOAD_ALGORITHM_ATTEMPTS})…`
+        );
+      }
+      return await fetchTrackDataOnce(trackId, quality, onProgress);
+    } catch (err) {
+      lastErr = err;
+      if (attempt === TRACK_DOWNLOAD_ALGORITHM_ATTEMPTS) throw err;
+    }
+  }
+  throw lastErr || new Error("Track download failed");
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────

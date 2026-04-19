@@ -254,19 +254,27 @@ export async function getTrackLyrics(trackId) {
 }
 
 export async function getTrackStream(trackId, quality = "HIGH", options = {}) {
-  const { allowProxyFallback = true, includeRequestMeta = false } = options;
+  const {
+    allowProxyFallback = true,
+    includeRequestMeta = false,
+    preferDirect = true,
+  } = options;
   return apiFetch(`tracks/${trackId}/playbackinfopostpaywall`, {
     audioquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
-  }, { preferDirect: true, allowProxyFallback, includeRequestMeta });
+  }, { preferDirect, allowProxyFallback, includeRequestMeta });
 }
 
 export async function getVideoStream(videoId, quality = "HIGH", options = {}) {
-  const { allowProxyFallback = true, includeRequestMeta = false } = options;
+  const {
+    allowProxyFallback = true,
+    includeRequestMeta = false,
+    preferDirect = true,
+  } = options;
   return apiFetch(`videos/${videoId}/playbackinfopostpaywall`, {
     videoquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
-  }, { preferDirect: true, allowProxyFallback, includeRequestMeta });
+  }, { preferDirect, allowProxyFallback, includeRequestMeta });
 }

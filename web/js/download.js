@@ -161,16 +161,28 @@ async function fetchSegment(url, strategy = "direct-then-proxy") {
     if (res) return res;
   }
 
+  const segmentError = (message) => {
+    const err = new Error(message);
+    err.segmentFetch = {
+      strategy,
+      hasProxy,
+      directStatus,
+      proxyStatus,
+      url,
+    };
+    return err;
+  };
+
   if (!hasProxy && order.includes("proxy")) {
-    if (directStatus !== null) throw new Error(`Segment fetch failed: ${directStatus} ${url}`);
-    throw new Error(`Segment fetch failed (no proxy configured): ${url}`);
+    if (directStatus !== null) throw segmentError(`Segment fetch failed: ${directStatus} ${url}`);
+    throw segmentError(`Segment fetch failed (no proxy configured): ${url}`);
   }
   if (proxyStatus !== null && directStatus !== null) {
-    throw new Error(`Segment fetch failed: ${proxyStatus} (direct=${directStatus}) ${url}`);
+    throw segmentError(`Segment fetch failed: ${proxyStatus} (direct=${directStatus}) ${url}`);
   }
-  if (proxyStatus !== null) throw new Error(`Segment fetch failed: ${proxyStatus} ${url}`);
-  if (directStatus !== null) throw new Error(`Segment fetch failed: ${directStatus} ${url}`);
-  throw new Error(`Segment fetch failed (network/cors): ${url}`);
+  if (proxyStatus !== null) throw segmentError(`Segment fetch failed: ${proxyStatus} ${url}`);
+  if (directStatus !== null) throw segmentError(`Segment fetch failed: ${directStatus} ${url}`);
+  throw segmentError(`Segment fetch failed (network/cors): ${url}`);
 }
 
 /**
@@ -1017,7 +1029,10 @@ function shouldTryQualityFallback(err) {
 }
 
 async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress, options = {}) {
-  const { allowProxyFallback = true } = options;
+  const {
+    allowProxyFallback = true,
+    preferDirect = true,
+  } = options;
   const candidates = qualityCandidates(requestedQuality);
   let lastErr = null;
 
@@ -1030,6 +1045,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
       const streamRes = await getTrackStream(trackId, q, {
         allowProxyFallback,
         includeRequestMeta: true,
+        preferDirect,
       });
       const streamInfo = streamRes?.data ?? streamRes;
       // `includeRequestMeta` is always requested above; default only as a guard
@@ -1050,6 +1066,15 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
 function isSegmentTokenExpiryError(err) {
   const msg = String(err?.message || "").toLowerCase();
   return /segment fetch failed: (401|403|410)\b|direct=(401|403|410)\b/.test(msg);
+}
+
+function isLikelyProxySegmentTokenBindingError(err) {
+  const info = err?.segmentFetch;
+  if (info && info.hasProxy) {
+    return info.proxyStatus === 403 && info.directStatus === null;
+  }
+  const msg = String(err?.message || "").toLowerCase();
+  return /segment fetch failed: 403\b/.test(msg) && !/direct=/.test(msg);
 }
 
 function getSegmentStrategyFromRequestMeta(requestMeta) {
@@ -1149,6 +1174,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
       onProgress?.(0, 1, "Segment still failing after stream refresh. Retrying with direct-only playback request…");
       const directOnly = await getTrackStreamWithFallback(trackId, streamQuality, onProgress, {
         allowProxyFallback: false,
+        preferDirect: true,
       });
       streamQuality = directOnly.quality;
       segmentStrategy = getSegmentStrategyFromRequestMeta(directOnly.requestMeta);
@@ -1161,7 +1187,31 @@ async function fetchTrackData(trackId, quality, onProgress) {
           `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
         );
       }
-      data = await downloadFromUrls(urls);
+      try {
+        data = await downloadFromUrls(urls);
+      } catch (directOnlyErr) {
+        if (!isSegmentTokenExpiryError(directOnlyErr) || !isLikelyProxySegmentTokenBindingError(directOnlyErr)) {
+          throw directOnlyErr;
+        }
+
+        onProgress?.(0, 1, "Direct segment fetch blocked; requesting proxy-bound stream token and retrying proxy-only…");
+        const proxyOnly = await getTrackStreamWithFallback(trackId, streamQuality, onProgress, {
+          allowProxyFallback: false,
+          preferDirect: false,
+        });
+        streamQuality = proxyOnly.quality;
+        segmentStrategy = "proxy-only";
+        const proxyParsed = parseStreamManifest(proxyOnly.streamInfo);
+        urls = proxyParsed.urls;
+        extension = proxyParsed.extension;
+        encryptionType = proxyParsed.encryptionType;
+        if (encryptionType && encryptionType !== "NONE") {
+          throw new Error(
+            `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
+          );
+        }
+        data = await downloadFromUrls(urls);
+      }
     }
   }
 

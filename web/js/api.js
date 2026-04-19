@@ -46,7 +46,11 @@ async function apiFetch(endpoint, params = {}, options = {}) {
     if (!preferDirect) return doRequest(token, true);
     try {
       return await doRequest(token, false);
-    } catch {
+    } catch (err) {
+      const msg = String(err?.message || "").toLowerCase();
+      const shouldFallbackToProxy = err instanceof TypeError
+        || /failed to fetch|networkerror|load failed|cors/.test(msg);
+      if (!shouldFallbackToProxy) throw err;
       // Some environments block direct API CORS requests; fall back to proxy.
       return doRequest(token, true);
     }

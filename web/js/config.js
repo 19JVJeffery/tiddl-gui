@@ -45,6 +45,10 @@ export function setCorsProxy(v) {
 export function proxied(url) {
   const proxy = getCorsProxy().trim();
   if (!proxy) return url;
+  // thingproxy expects the raw URL, not encoded
+  if (proxy.includes('thingproxy.freeboard.io/fetch/')) {
+    return proxy + url;
+  }
   return proxy + encodeURIComponent(url);
 }
 

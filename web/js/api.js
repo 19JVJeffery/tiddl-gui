@@ -159,11 +159,7 @@ async function fetchAllItems(fetchFn, pageSize = 50) {
     .join("|");
   let lastSignature = pageSignature(firstItems);
 
-  const firstOffset = Number(first?.offset);
-  const firstLimit = Number(first?.limit);
-  let offset = Number.isFinite(firstOffset) && Number.isFinite(firstLimit) && firstLimit > 0
-    ? firstOffset + firstLimit
-    : items.length;
+  let offset = items.length;
 
   let pagesFetched = 0;
   while ((!hasKnownTotal || items.length < total) && pagesFetched < MAX_PAGINATION_PAGES) {

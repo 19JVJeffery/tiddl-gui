@@ -10,8 +10,8 @@ import { getValidToken, loadAuth, refreshToken } from "./auth.js";
 /**
  * Safety guard for paginated endpoints.
  * Prevents infinite loops if an upstream API/proxy keeps repeating pages or offsets.
- * 2000 pages is far above real-world library sizes (100k+ items at 50/page)
- * while still guaranteeing termination under pathological responses.
+ * 2000 pages × 50 items/page = 100,000 items, which is far above typical
+ * real-world library sizes while still guaranteeing termination.
  */
 const MAX_PAGINATION_PAGES = 2000;
 

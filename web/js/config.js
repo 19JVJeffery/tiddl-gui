@@ -4,7 +4,14 @@
  * Credentials mirror the ones embedded in the Python CLI (already public in
  * the open-source repository).  They are stored the same way — as a single
  * base-64 string that decodes to "clientId;clientSecret".
+ *
+ * Also exports proxyFetch — a unified helper that routes an HTTP request
+ * through the configured CORS proxy, with an optional direct-first fallback.
+ * Using proxyFetch instead of raw fetch gives every caller automatic timeouts
+ * and retry back-off via the underlying robustFetch primitive.
  */
+
+import { robustFetch, API_TIMEOUT_MS, isNetworkError } from "./http.js";
 
 const _raw = atob(
   "ZlgySnhkbW50WldLMGl4VDsxTm45QWZEQWp4cmdKRkpiS05XTGVBeUtHVkdtSU51WFBQTEhWWEF2eEFnPQ=="
@@ -264,3 +271,60 @@ export function setTemplate(type, v) {
   localStorage.setItem(`tiddl_tpl_${type}`, v);
 }
 export { TEMPLATE_DEFAULTS };
+
+// ─── Unified direct / proxy request helper ────────────────────────────────────
+
+/**
+ * Make an HTTP request, optionally routing it through the CORS proxy.
+ *
+ * `strategy` controls which URL(s) are tried and in which order:
+ *   "proxy-only"        — always use the proxy  (safest for Tidal API calls)
+ *   "direct-only"       — never  use the proxy
+ *   "direct-then-proxy" — try direct first; fall back to proxy on network error
+ *   "proxy-then-direct" — try proxy first; fall back to direct on network error
+ *
+ * When there is no proxy configured the strategy degrades to "direct-only".
+ *
+ * The returned `{ res, usedProxy }` object contains the raw Response and a
+ * boolean indicating which path succeeded, so callers can adapt their retry
+ * strategy (e.g. segment token binding in download.js).
+ *
+ * @param {string}       url       Target URL (before proxying).
+ * @param {RequestInit}  [init]    Fetch options (headers, body, method …).
+ * @param {object}       [opts]
+ * @param {string}       [opts.strategy="proxy-only"]
+ * @param {number}       [opts.timeoutMs=API_TIMEOUT_MS]
+ * @param {number}       [opts.retries=2]
+ * @returns {Promise<{ res: Response, usedProxy: boolean }>}
+ */
+export async function proxyFetch(url, init = {}, {
+  strategy  = "proxy-only",
+  timeoutMs = API_TIMEOUT_MS,
+  retries   = 2,
+} = {}) {
+  const proxyUrl = proxied(url);
+  const hasProxy = proxyUrl !== url;
+
+  const fetchOne = async (useProxy) => {
+    const target = useProxy ? proxyUrl : url;
+    const res = await robustFetch(target, init, { timeoutMs, retries });
+    return { res, usedProxy: useProxy };
+  };
+
+  const _isNetworkFailure = isNetworkError;
+
+  // When no proxy is configured every strategy falls through to direct.
+  if (!hasProxy) return fetchOne(false);
+
+  if (strategy === "proxy-only")  return fetchOne(true);
+  if (strategy === "direct-only") return fetchOne(false);
+
+  // Fallback strategies: try primary, catch network errors, try secondary.
+  const primaryIsProxy = strategy === "proxy-then-direct";
+  try {
+    return await fetchOne(primaryIsProxy);
+  } catch (err) {
+    if (!_isNetworkFailure(err)) throw err;
+    return fetchOne(!primaryIsProxy);
+  }
+}

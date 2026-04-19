@@ -4,9 +4,15 @@
  * Parses TIDAL stream manifests, fetches audio/video segments, and
  * triggers a browser file-save.  Mirrors tiddl/core/utils/parse.py and
  * tiddl/core/utils/download.py.
+ *
+ * All network calls now use timedFetch (http.js) so every fetch has an
+ * AbortController-backed timeout and normalized CORS/network errors.
+ * Segment downloads use SEGMENT_TIMEOUT_MS (90 s) to handle large files
+ * on slow connections without hanging indefinitely.
  */
 
 import { proxied, getMetadataEnable, getMetadataCover, getCoverSave, getCoverAllowed, getCoverSize, getMetadataLyrics, getLyricsTimestamps } from "./config.js";
+import { timedFetch, SEGMENT_TIMEOUT_MS, API_TIMEOUT_MS } from "./http.js";
 import { getTrackStream, getVideoStream, getTrack, getAlbum, getAllAlbumItems, getPlaylist, getAllPlaylistItems, getAllMixItems, getArtistAlbums, getArtistSingles, getTrackLyrics } from "./api.js";
 
 /** Delay (ms) before revoking an object URL after triggering a download. */
@@ -155,6 +161,9 @@ function parseStreamManifest(streamInfo) {
  * originating IP, which changes when traffic is routed via a proxy server.
  * Direct fetch is therefore attempted first; the proxy is only used if the
  * direct request fails (e.g. due to a CORS restriction in the browser).
+ *
+ * Both paths use timedFetch with SEGMENT_TIMEOUT_MS (90 s) so a stalled
+ * CDN request does not hang the download indefinitely.
  */
 async function fetchSegment(url, strategy = "direct-then-proxy") {
   const proxiedUrl = proxied(url);
@@ -164,11 +173,11 @@ async function fetchSegment(url, strategy = "direct-then-proxy") {
 
   async function tryDirect() {
     try {
-      const res = await fetch(url);
+      const res = await timedFetch(url, {}, SEGMENT_TIMEOUT_MS);
       if (res.ok) return res;
       directStatus = res.status;
     } catch {
-      // Network / CORS error.
+      // Network / CORS / timeout — fall through.
     }
     return null;
   }
@@ -176,11 +185,11 @@ async function fetchSegment(url, strategy = "direct-then-proxy") {
   async function tryProxy() {
     if (!hasProxy) return null;
     try {
-      const res = await fetch(proxiedUrl);
+      const res = await timedFetch(proxiedUrl, {}, SEGMENT_TIMEOUT_MS);
       if (res.ok) return res;
       proxyStatus = res.status;
     } catch {
-      // Network / CORS error.
+      // Network / CORS / timeout — fall through.
     }
     return null;
   }
@@ -302,10 +311,10 @@ async function fetchCoverArt(coverHash, size = 1280) {
   if (!coverHash) return null;
   const url = `https://resources.tidal.com/images/${coverHash.replace(/-/g, "/")}/${size}x${size}.jpg`;
   try {
-    let res = await fetch(url);
+    let res = await timedFetch(url, {}, API_TIMEOUT_MS);
     if (!res.ok) {
       const proxiedUrl = proxied(url);
-      if (proxiedUrl !== url) res = await fetch(proxiedUrl);
+      if (proxiedUrl !== url) res = await timedFetch(proxiedUrl, {}, API_TIMEOUT_MS);
     }
     if (res.ok) return new Uint8Array(await res.arrayBuffer());
   } catch { /* ignore — cover embedding is best-effort */ }

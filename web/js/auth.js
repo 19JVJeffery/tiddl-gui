@@ -2,10 +2,14 @@
  * tiddl-web — authentication module
  *
  * Implements the TIDAL device-code OAuth2 flow, token storage in
- * localStorage, and token refresh.
+ * localStorage, and automatic token refresh.
+ *
+ * All HTTP calls now go through robustFetch (from http.js) so they have
+ * proper timeouts, retry with back-off, and normalized error types.
  */
 
 import { AUTH_URL, API_URL, getClientId, getClientSecret, proxied } from "./config.js";
+import { robustFetch, AUTH_TIMEOUT_MS } from "./http.js";
 
 const STORAGE_KEY = "tiddl_auth";
 
@@ -58,34 +62,35 @@ class TidalAuthError extends Error {
 
 // ─── HTTP helpers ──────────────────────────────────────────────────────────
 
-async function postForm(url, params) {
-  const body = new URLSearchParams(params);
-  const res = await fetch(proxied(url), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
+/**
+ * POST an application/x-www-form-urlencoded body through the CORS proxy.
+ * Uses robustFetch so the call has a timeout and automatic retry.
+ */
+async function postFormRaw(url, params, extraHeaders = {}) {
+  const body = new URLSearchParams(params).toString();
+  const res  = await robustFetch(proxied(url), {
+    method:  "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...extraHeaders,
+    },
+    body,
     credentials: "omit",
-  });
-  const json = await res.json();
+  }, { timeoutMs: AUTH_TIMEOUT_MS, retries: 2 });
+
+  let json = {};
+  try { json = await res.json(); } catch { /* malformed or empty response body */ }
   if (!res.ok) throw new TidalAuthError(res.status, json);
   return json;
 }
 
+async function postForm(url, params) {
+  return postFormRaw(url, params);
+}
+
 async function postFormWithBasicAuth(url, params, clientId, clientSecret) {
-  const body = new URLSearchParams(params);
   const credentials = btoa(`${clientId}:${clientSecret}`);
-  const res = await fetch(proxied(url), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Basic ${credentials}`,
-    },
-    body: body.toString(),
-    credentials: "omit",
-  });
-  const json = await res.json();
-  if (!res.ok) throw new TidalAuthError(res.status, json);
-  return json;
+  return postFormRaw(url, params, { Authorization: `Basic ${credentials}` });
 }
 
 // ─── Device-code flow ─────────────────────────────────────────────────────
@@ -152,10 +157,10 @@ export async function logout() {
   const auth = loadAuth();
   if (auth?.token) {
     try {
-      await fetch(proxied(`${API_URL}/logout`), {
-        method: "POST",
+      await robustFetch(proxied(`${API_URL}/logout`), {
+        method:  "POST",
         headers: { Authorization: `Bearer ${auth.token}` },
-      });
+      }, { timeoutMs: AUTH_TIMEOUT_MS, retries: 1 });
     } catch {
       /* best-effort */
     }

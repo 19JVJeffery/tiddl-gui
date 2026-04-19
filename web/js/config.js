@@ -34,11 +34,34 @@ export function setClientSecret(v) {
 // ─── CORS proxy ───────────────────────────────────────────────────────────────
 
 /** CORS proxy prefix — every request to Tidal is sent through this URL. */
+const DEFAULT_CORS_PROXY = "https://corsproxy.io/?url=";
+
+function normalizeCorsProxy(v) {
+  const raw = String(v ?? "").trim();
+  if (!raw || /^(?:null|undefined)$/i.test(raw)) return DEFAULT_CORS_PROXY;
+
+  if (raw.includes("corsproxy.io")) {
+    // Accept common forms and normalize to a working prefix.
+    if (/[?&]url=$/.test(raw)) return raw;
+    if (/[?&]url$/i.test(raw)) return `${raw}=`;
+    if (raw.includes("?")) return `${raw}&url=`;
+    return `${raw.replace(/\/?$/, "/")}?url=`;
+  }
+
+  return raw;
+}
+
 export function getCorsProxy() {
-  return localStorage.getItem("tiddl_cors_proxy") ?? "https://corsproxy.io/?url=";
+  const saved = localStorage.getItem("tiddl_cors_proxy");
+  return normalizeCorsProxy(saved);
 }
 export function setCorsProxy(v) {
-  localStorage.setItem("tiddl_cors_proxy", v);
+  const raw = String(v ?? "").trim();
+  if (!raw) {
+    localStorage.removeItem("tiddl_cors_proxy");
+    return;
+  }
+  localStorage.setItem("tiddl_cors_proxy", normalizeCorsProxy(raw));
 }
 
 /** Wrap a target URL with the configured CORS proxy. */

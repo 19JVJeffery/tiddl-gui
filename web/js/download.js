@@ -1093,7 +1093,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
   const initial = await getTrackStreamWithFallback(trackId, quality, onProgress);
   let streamQuality = initial.quality;
-  let segmentStrategy = initial?.requestMeta?.usedProxy ? "proxy-then-direct" : "direct-then-proxy";
+  let segmentStrategy = initial.requestMeta.usedProxy ? "proxy-then-direct" : "direct-then-proxy";
   let { urls, extension, encryptionType } = parseStreamManifest(initial.streamInfo);
 
   if (encryptionType && encryptionType !== "NONE") {
@@ -1104,9 +1104,11 @@ async function fetchTrackData(trackId, quality, onProgress) {
 
   const downloadFromUrls = async (segmentUrls) => {
     onProgress?.(0, segmentUrls.length, `Downloading ${segmentUrls.length} segment(s)…`);
-    return fetchSegments(segmentUrls, (done, total) =>
-      onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
-    , segmentStrategy);
+    return fetchSegments(
+      segmentUrls,
+      (done, total) => onProgress?.(done, total, `Downloading segment ${done}/${total}…`),
+      segmentStrategy
+    );
   };
 
   let data;
@@ -1121,7 +1123,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
     onProgress?.(0, 1, "Segment URL expired (401/403/410). Refreshing stream token and retrying once…");
     const refreshed = await getTrackStreamWithFallback(trackId, streamQuality, onProgress);
     streamQuality = refreshed.quality;
-    segmentStrategy = refreshed?.requestMeta?.usedProxy ? "proxy-then-direct" : "direct-then-proxy";
+    segmentStrategy = refreshed.requestMeta.usedProxy ? "proxy-then-direct" : "direct-then-proxy";
     const reparsed = parseStreamManifest(refreshed.streamInfo);
     urls = reparsed.urls;
     extension = reparsed.extension;

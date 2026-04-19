@@ -36,16 +36,33 @@ export function setClientSecret(v) {
 /** CORS proxy prefix — every request to Tidal is sent through this URL. */
 const DEFAULT_CORS_PROXY = "https://corsproxy.io/?url=";
 
+function isCorsproxyHost(proxy) {
+  try {
+    const host = new URL(proxy).hostname.toLowerCase();
+    return host === "corsproxy.io" || host.endsWith(".corsproxy.io");
+  } catch {
+    return false;
+  }
+}
+
 function normalizeCorsProxy(v) {
   const raw = String(v ?? "").trim();
-  if (!raw || /^(?:null|undefined)$/i.test(raw)) return DEFAULT_CORS_PROXY;
+  if (!raw) return DEFAULT_CORS_PROXY;
 
-  if (raw.includes("corsproxy.io")) {
+  if (isCorsproxyHost(raw)) {
     // Accept common forms and normalize to a working prefix.
-    if (/[?&]url=$/.test(raw)) return raw;
-    if (/[?&]url$/i.test(raw)) return `${raw}=`;
-    if (raw.includes("?")) return `${raw}&url=`;
-    return `${raw.replace(/\/?$/, "/")}?url=`;
+    try {
+      const parsed = new URL(raw);
+      const params = new URLSearchParams(parsed.search);
+      params.delete("url");
+      const query = params.toString();
+      const prefix = `${parsed.origin}${parsed.pathname}`;
+      return query
+        ? `${prefix}?${query}&url=`
+        : `${prefix}?url=`;
+    } catch {
+      return DEFAULT_CORS_PROXY;
+    }
   }
 
   return raw;
@@ -66,10 +83,9 @@ export function setCorsProxy(v) {
 
 /** Wrap a target URL with the configured CORS proxy. */
 export function proxied(url) {
-  const proxy = getCorsProxy().trim();
-  if (!proxy) return url;
+  const proxy = getCorsProxy();
   // corsproxy.io expects the URL to be encoded as a query param
-  if (proxy.includes('corsproxy.io')) {
+  if (isCorsproxyHost(proxy)) {
     return proxy + encodeURIComponent(url);
   }
   // fallback: just append raw

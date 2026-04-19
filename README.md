@@ -18,6 +18,12 @@ No installation needed — open the link and go.
 > [!WARNING]
 > This app is for personal use only and is not affiliated with Tidal. Users must ensure their use complies with Tidal's terms of service and local copyright laws. Downloaded tracks are for personal use and may not be shared or redistributed. The developer assumes no responsibility for misuse of this app.
 
+If you would like to support development of this tool, please donate at my Ko-fi page.
+
+<a href="https://ko-fi.com/tiddlgui" target="_blank">
+  <img width="25%" alt="support_me_on_kofi_beige" src="https://github.com/user-attachments/assets/8763d962-1c6e-4fd3-b46c-592c4fc04e75" />
+</a>
+
 ## How to use
 
 ### 1 — Log in

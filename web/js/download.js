@@ -58,7 +58,10 @@ function parseDashManifest(manifest) {
     if (r) segmentCount += parseInt(r, 10);
   }
   // Some manifests omit SegmentTimeline; fall back to one media segment.
-  if (!segmentCount) segmentCount = 1;
+  if (!segmentCount) {
+    console.warn("DASH manifest missing SegmentTimeline; falling back to one segment.");
+    segmentCount = 1;
+  }
 
   const baseUrl = (pick("BaseURL")?.textContent || "").trim();
   const resolveDashUrl = (u) => {
@@ -992,13 +995,13 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
     const q = candidates[i];
     try {
       if (i > 0) {
-        onProgress?.(1, 1, `Retrying stream with fallback quality ${q} (attempt ${i + 1}/${candidates.length})…`);
+        onProgress?.(0.5, 1, `Retrying stream with fallback quality ${q} (attempt ${i + 1}/${candidates.length})…`);
       }
       const streamInfo = await getTrackStream(trackId, q);
       return { streamInfo, quality: q };
     } catch (err) {
       lastErr = err;
-      if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
+      if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) break;
     }
   }
 

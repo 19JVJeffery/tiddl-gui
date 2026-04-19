@@ -50,7 +50,7 @@ async function apiFetch(endpoint, params = {}, options = {}) {
     }, { strategy, timeoutMs: API_TIMEOUT_MS, retries: 2 });
 
     let json = {};
-    try { json = await res.json(); } catch { /* empty body */ }
+    try { json = await res.json(); } catch { /* malformed or empty response body */ }
     return { res, json, usedProxy };
   }
 

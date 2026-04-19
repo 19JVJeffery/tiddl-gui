@@ -79,7 +79,7 @@ async function postFormRaw(url, params, extraHeaders = {}) {
   }, { timeoutMs: AUTH_TIMEOUT_MS, retries: 2 });
 
   let json = {};
-  try { json = await res.json(); } catch { /* empty body */ }
+  try { json = await res.json(); } catch { /* malformed or empty response body */ }
   if (!res.ok) throw new TidalAuthError(res.status, json);
   return json;
 }

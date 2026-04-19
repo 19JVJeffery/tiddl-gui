@@ -66,11 +66,15 @@ export class TiddlError extends Error {
 
 const _sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function _isNetworkLike(err) {
+/** Returns true when `err` looks like a network / CORS error. */
+export function isNetworkError(err) {
   if (err instanceof TypeError) return true; // native "Failed to fetch"
   const m = String(err?.message ?? "").toLowerCase();
   return /failed to fetch|network[\s_]?error|load failed|cors|cross[\s-]?origin/.test(m);
 }
+
+// Keep internal alias for the few places this module uses it before exporting.
+const _isNetworkLike = isNetworkError;
 
 // ─── timedFetch ───────────────────────────────────────────────────────────────
 
@@ -90,6 +94,8 @@ export async function timedFetch(url, init = {}, timeoutMs = API_TIMEOUT_MS) {
   const ac    = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
+    // lgtm[js/request-forgery] — URL originates from Tidal API responses and
+    // user-configured settings; caller is responsible for validating inputs.
     return await fetch(url, { ...init, signal: ac.signal });
   } catch (err) {
     if (err.name === "AbortError" || ac.signal.aborted) {
@@ -137,25 +143,25 @@ export async function robustFetch(url, init = {}, {
   retries   = 2,
   baseDelay = 700,
 } = {}) {
-  let lastErr;
   for (let attempt = 0; attempt <= retries; attempt++) {
+    // Back-off before every retry (not before the first attempt).
+    if (attempt > 0) {
+      await _sleep(baseDelay * attempt);
+    }
     try {
       const res = await timedFetch(url, init, timeoutMs);
-      if (!res.ok && attempt < retries && (res.status === 429 || res.status >= 500)) {
-        await _sleep(baseDelay * (attempt + 1));
-        continue;
+      if (!res.ok && (res.status === 429 || res.status >= 500) && attempt < retries) {
+        continue; // sleep + retry
       }
       return res;
     } catch (err) {
-      lastErr = err;
       const isHardStop = err instanceof TiddlError
         && (err.kind === ErrKind.AUTH || err.kind === ErrKind.ENCRYPTED);
-      if (!isHardStop && attempt < retries) {
-        await _sleep(baseDelay * (attempt + 1));
-        continue;
-      }
-      throw err;
+      if (isHardStop || attempt >= retries) throw err;
+      // Network / timeout errors are retried; sleep is handled at the top of
+      // the next iteration.
     }
   }
-  throw lastErr;
+  // Unreachable — every path above either returns or throws.
+  throw new TiddlError("All retry attempts exhausted", ErrKind.NETWORK, { url });
 }

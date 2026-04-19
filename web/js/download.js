@@ -39,17 +39,18 @@ function parseDashManifest(manifest) {
 
   const NS = "urn:mpeg:dash:schema:mpd:2011";
 
-  const pick = (name) =>
-    doc.getElementsByTagNameNS(NS, name)[0] || doc.getElementsByTagName(name)[0];
+  const nodes = (name) => {
+    const nsNodes = [...doc.getElementsByTagNameNS(NS, name)];
+    return nsNodes.length ? nsNodes : [...doc.getElementsByTagName(name)];
+  };
+  const pick = (name) => nodes(name)[0];
 
   const segTpl = pick("SegmentTemplate");
   const urlTemplate = segTpl?.getAttribute("media") || "";
   const initTemplate = segTpl?.getAttribute("initialization") || "";
   const startNumber = parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1;
 
-  const timeline = doc.getElementsByTagNameNS(NS, "S").length
-    ? [...doc.getElementsByTagNameNS(NS, "S")]
-    : [...doc.getElementsByTagName("S")];
+  const timeline = nodes("S");
   let segmentCount = 0;
   for (const el of timeline) {
     segmentCount += 1;
@@ -81,12 +82,8 @@ function parseDashManifest(manifest) {
     urls.push(resolveDashUrl(replaceNumber(urlTemplate, segmentNumber)));
   }
 
-  const representations = doc.getElementsByTagNameNS(NS, "Representation").length
-    ? [...doc.getElementsByTagNameNS(NS, "Representation")]
-    : [...doc.getElementsByTagName("Representation")];
-  const adaptationSets = doc.getElementsByTagNameNS(NS, "AdaptationSet").length
-    ? [...doc.getElementsByTagNameNS(NS, "AdaptationSet")]
-    : [...doc.getElementsByTagName("AdaptationSet")];
+  const representations = nodes("Representation");
+  const adaptationSets = nodes("AdaptationSet");
   const hasFlacCodec = representations.some((r) =>
     String(r.getAttribute("codecs") || "").toLowerCase().includes("flac")
   ) || adaptationSets.some((a) =>
@@ -995,7 +992,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
     const q = candidates[i];
     try {
       if (i > 0) {
-        onProgress?.(0, 1, `Retrying stream with fallback quality ${q} (attempt ${i + 1}/${candidates.length})…`);
+        onProgress?.(1, 1, `Retrying stream with fallback quality ${q} (attempt ${i + 1}/${candidates.length})…`);
       }
       const streamInfo = await getTrackStream(trackId, q);
       return { streamInfo, quality: q };

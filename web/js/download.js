@@ -120,10 +120,12 @@ function parseStreamManifest(streamInfo) {
  * direct request fails (e.g. due to a CORS restriction in the browser).
  */
 async function fetchSegment(url) {
+  let directStatus = null;
   // 1. Try direct (no proxy) — works for most CDN segments
   try {
     const res = await fetch(url);
     if (res.ok) return res;
+    directStatus = res.status;
     // Non-2xx from CDN — fall through to proxy attempt
   } catch {
     // Network / CORS error — fall through
@@ -133,10 +135,16 @@ async function fetchSegment(url) {
   const proxiedUrl = proxied(url);
   if (proxiedUrl === url) {
     // Proxy not configured; nothing more to try
+    if (directStatus !== null) {
+      throw new Error(`Segment fetch failed: ${directStatus} ${url}`);
+    }
     throw new Error(`Segment fetch failed (no proxy configured): ${url}`);
   }
   const res2 = await fetch(proxiedUrl);
   if (!res2.ok) {
+    if (directStatus !== null) {
+      throw new Error(`Segment fetch failed: ${res2.status} (direct=${directStatus}) ${url}`);
+    }
     throw new Error(`Segment fetch failed: ${res2.status} ${url}`);
   }
   return res2;
@@ -967,7 +975,7 @@ function buildZip(files) {
 
 const QUALITY_FALLBACKS = {
   HI_RES_LOSSLESS: ["LOSSLESS", "HIGH", "LOW"],
-  LOSSLESS: ["HI_RES_LOSSLESS", "HIGH", "LOW"],
+  LOSSLESS: ["HIGH", "LOW"],
   HIGH: ["LOW"],
   LOW: [],
 };
@@ -981,8 +989,8 @@ function qualityCandidates(requestedQuality) {
 function shouldTryQualityFallback(err) {
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
-  if (msg.includes("not authenticated")) return false;
-  return /403|404|quality|not available|not found|unsupported|forbidden/.test(msg);
+  if (/not authenticated|unauthorized|token/.test(msg)) return false;
+  return /\b(?:quality|audioquality|unsupported|subscription|plan)\b|not available\b/.test(msg);
 }
 
 async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress) {
@@ -1004,6 +1012,11 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
   }
 
   throw lastErr || new Error("Unable to fetch track stream");
+}
+
+function isSegmentTokenExpiryError(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  return /segment fetch failed: (401|403|410)\b|direct=(401|403|410)\b/.test(msg);
 }
 
 /**
@@ -1049,8 +1062,9 @@ async function fetchTrackData(trackId, quality, onProgress) {
   }
 
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
-  const { streamInfo } = await getTrackStreamWithFallback(trackId, quality, onProgress);
-  const { urls, extension, encryptionType } = parseStreamManifest(streamInfo);
+  const initial = await getTrackStreamWithFallback(trackId, quality, onProgress);
+  let streamQuality = initial.quality;
+  let { urls, extension, encryptionType } = parseStreamManifest(initial.streamInfo);
 
   if (encryptionType && encryptionType !== "NONE") {
     throw new Error(
@@ -1058,10 +1072,36 @@ async function fetchTrackData(trackId, quality, onProgress) {
     );
   }
 
-  onProgress?.(0, urls.length, `Downloading ${urls.length} segment(s)…`);
-  const data = await fetchSegments(urls, (done, total) =>
-    onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
-  );
+  const downloadFromUrls = async (segmentUrls) => {
+    onProgress?.(0, segmentUrls.length, `Downloading ${segmentUrls.length} segment(s)…`);
+    return fetchSegments(segmentUrls, (done, total) =>
+      onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
+    );
+  };
+
+  let data;
+  try {
+    data = await downloadFromUrls(urls);
+  } catch (err) {
+    if (!isSegmentTokenExpiryError(err)) throw err;
+
+    // Single retry by design: an immediate re-fetch should provide fresh signed
+    // segment URLs. Repeating beyond one retry risks long loops on persistent
+    // permission/subscription/geoblocking failures and slows large queues.
+    onProgress?.(0, 1, "Segment URL expired (401/403/410). Refreshing stream token and retrying once…");
+    const refreshed = await getTrackStreamWithFallback(trackId, streamQuality, onProgress);
+    streamQuality = refreshed.quality;
+    const reparsed = parseStreamManifest(refreshed.streamInfo);
+    urls = reparsed.urls;
+    extension = reparsed.extension;
+    encryptionType = reparsed.encryptionType;
+    if (encryptionType && encryptionType !== "NONE") {
+      throw new Error(
+        `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
+      );
+    }
+    data = await downloadFromUrls(urls);
+  }
 
   return { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics };
 }

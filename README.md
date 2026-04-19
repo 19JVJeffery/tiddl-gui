@@ -73,6 +73,17 @@ Tidal's API blocks direct browser requests. All API calls are routed through a C
 
 To use a different proxy, open **Settings** and update the **Proxy prefix URL** field.
 
+## Troubleshooting
+
+- **Playlist stops at ~100 tracks**  
+  The app now fetches paginated playlist items more defensively (including APIs that return numeric totals as strings), so large playlists should continue beyond the first page.
+
+- **HiFi / Max expected FLAC but got .m4a**  
+  The downloader now avoids inappropriate quality-tier downgrades on generic 403 errors and only falls back when the quality itself is unavailable.
+
+- **`Segment fetch failed: 403` (especially on FLAC/HiFi/Max)**  
+  Segment URLs are short-lived. The app now retries once by reacquiring stream info (fresh segment URLs) before failing.
+
 ## Run locally
 
 ### Prerequisites

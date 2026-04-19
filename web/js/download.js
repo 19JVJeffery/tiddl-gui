@@ -1067,7 +1067,7 @@ function shouldTryAlternatePlaybackMode(err) {
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
   if (/not authenticated|unauthorized|token/.test(msg)) return false;
-  return /stream is encrypted|unsupported manifest|empty stream manifest|unsupported manifest type|playback mode|assetpresentation|drm|cipher/.test(msg);
+  return /\bstream is encrypted\b|\bunsupported manifest\b|\bempty stream manifest\b|\bunsupported manifest type\b|\bplayback mode\b|\bassetpresentation\b|\bdrm\b|\bcipher\b/.test(msg);
 }
 
 function ensureStreamIsDownloadable(parsedManifest) {

@@ -1067,7 +1067,7 @@ function shouldTryAlternatePlaybackMode(err) {
   const msg = String(err?.message || "").toLowerCase();
   if (!msg) return false;
   if (/not authenticated|unauthorized|token/.test(msg)) return false;
-  return /stream is encrypted|manifest|playback|assetpresentation|offline|stream mode/.test(msg);
+  return /stream is encrypted|unsupported manifest|empty stream manifest|unsupported manifest type|playback mode|assetpresentation|drm|cipher/.test(msg);
 }
 
 function ensureStreamIsDownloadable(parsedManifest) {
@@ -1088,6 +1088,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
 
   for (let i = 0; i < candidates.length; i++) {
     const q = candidates[i];
+    let continueWithLowerQuality = false;
     for (let modeIndex = 0; modeIndex < TRACK_PLAYBACK_MODE_CANDIDATES.length; modeIndex++) {
       const playbackMode = TRACK_PLAYBACK_MODE_CANDIDATES[modeIndex];
       for (let attempt = 0; attempt <= PLAYBACK_NOT_READY_RETRIES; attempt++) {
@@ -1129,11 +1130,13 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
             break;
           }
           if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
-          modeIndex = TRACK_PLAYBACK_MODE_CANDIDATES.length;
+          continueWithLowerQuality = true;
           break;
         }
       }
+      if (continueWithLowerQuality) break;
     }
+    if (continueWithLowerQuality) continue;
   }
 
   throw lastErr || new Error("Unable to fetch track stream");

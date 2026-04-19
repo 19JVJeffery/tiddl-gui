@@ -66,9 +66,12 @@ export class TiddlError extends Error {
 
 const _sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Returns true when `err` looks like a network / CORS error. */
+/** Returns true when `err` looks like a network / CORS / timeout error. */
 export function isNetworkError(err) {
   if (err instanceof TypeError) return true; // native "Failed to fetch"
+  // TiddlError with kind NETWORK already represents the normalized form of
+  // any network failure (including timeouts) produced by timedFetch.
+  if (err?.isTiddlError && err.kind === ErrKind.NETWORK) return true;
   const m = String(err?.message ?? "").toLowerCase();
   return /failed to fetch|network[\s_]?error|load failed|cors|cross[\s-]?origin/.test(m);
 }
@@ -162,6 +165,8 @@ export async function robustFetch(url, init = {}, {
       // the next iteration.
     }
   }
-  // Unreachable — every path above either returns or throws.
+  // Safety fallback — not reachable given the logic above (every path returns
+  // or throws inside the loop), but included so TypeScript / strict linters
+  // do not complain about a missing return and to guard future edits.
   throw new TiddlError("All retry attempts exhausted", ErrKind.NETWORK, { url });
 }

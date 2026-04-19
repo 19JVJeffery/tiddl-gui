@@ -11,7 +11,7 @@
  * and retry back-off via the underlying robustFetch primitive.
  */
 
-import { robustFetch, API_TIMEOUT_MS, TiddlError, ErrKind, isNetworkError } from "./http.js";
+import { robustFetch, API_TIMEOUT_MS, isNetworkError } from "./http.js";
 
 const _raw = atob(
   "ZlgySnhkbW50WldLMGl4VDsxTm45QWZEQWp4cmdKRkpiS05XTGVBeUtHVkdtSU51WFBQTEhWWEF2eEFnPQ=="
@@ -311,10 +311,7 @@ export async function proxyFetch(url, init = {}, {
     return { res, usedProxy: useProxy };
   };
 
-  const _isNetworkFailure = (err) => {
-    if (err instanceof TiddlError && err.kind === ErrKind.NETWORK) return true;
-    return isNetworkError(err);
-  };
+  const _isNetworkFailure = isNetworkError;
 
   // When no proxy is configured every strategy falls through to direct.
   if (!hasProxy) return fetchOne(false);

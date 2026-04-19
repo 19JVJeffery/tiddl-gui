@@ -119,48 +119,71 @@ function parseStreamManifest(streamInfo) {
  * Direct fetch is therefore attempted first; the proxy is only used if the
  * direct request fails (e.g. due to a CORS restriction in the browser).
  */
-async function fetchSegment(url) {
+async function fetchSegment(url, strategy = "direct-then-proxy") {
+  const proxiedUrl = proxied(url);
+  const hasProxy = proxiedUrl !== url;
   let directStatus = null;
-  // 1. Try direct (no proxy) — works for most CDN segments
-  try {
-    const res = await fetch(url);
-    if (res.ok) return res;
-    directStatus = res.status;
-    // Non-2xx from CDN — fall through to proxy attempt
-  } catch {
-    // Network / CORS error — fall through
+  let proxyStatus = null;
+
+  async function tryDirect() {
+    try {
+      const res = await fetch(url);
+      if (res.ok) return res;
+      directStatus = res.status;
+    } catch {
+      // Network / CORS error.
+    }
+    return null;
   }
 
-  // 2. Fall back to proxy
-  const proxiedUrl = proxied(url);
-  if (proxiedUrl === url) {
-    // Proxy not configured; nothing more to try
-    if (directStatus !== null) {
-      throw new Error(`Segment fetch failed: ${directStatus} ${url}`);
+  async function tryProxy() {
+    if (!hasProxy) return null;
+    try {
+      const res = await fetch(proxiedUrl);
+      if (res.ok) return res;
+      proxyStatus = res.status;
+    } catch {
+      // Network / CORS error.
     }
+    return null;
+  }
+
+  const orders = {
+    "direct-only": ["direct"],
+    "proxy-only": ["proxy"],
+    "direct-then-proxy": ["direct", "proxy"],
+    "proxy-then-direct": ["proxy", "direct"],
+  };
+  const order = orders[strategy] || orders["direct-then-proxy"];
+
+  for (const mode of order) {
+    const res = mode === "direct" ? await tryDirect() : await tryProxy();
+    if (res) return res;
+  }
+
+  if (!hasProxy && order.includes("proxy")) {
+    if (directStatus !== null) throw new Error(`Segment fetch failed: ${directStatus} ${url}`);
     throw new Error(`Segment fetch failed (no proxy configured): ${url}`);
   }
-  const res2 = await fetch(proxiedUrl);
-  if (!res2.ok) {
-    if (directStatus !== null) {
-      throw new Error(`Segment fetch failed: ${res2.status} (direct=${directStatus}) ${url}`);
-    }
-    throw new Error(`Segment fetch failed: ${res2.status} ${url}`);
+  if (proxyStatus !== null && directStatus !== null) {
+    throw new Error(`Segment fetch failed: ${proxyStatus} (direct=${directStatus}) ${url}`);
   }
-  return res2;
+  if (proxyStatus !== null) throw new Error(`Segment fetch failed: ${proxyStatus} ${url}`);
+  if (directStatus !== null) throw new Error(`Segment fetch failed: ${directStatus} ${url}`);
+  throw new Error(`Segment fetch failed (network/cors): ${url}`);
 }
 
 /**
  * Fetch all segment URLs and concatenate them into a single Uint8Array.
  * Calls onProgress(downloaded, total) after each segment.
  */
-async function fetchSegments(urls, onProgress) {
+async function fetchSegments(urls, onProgress, strategy = "direct-then-proxy") {
   const chunks = [];
   let downloaded = 0;
   const total = urls.length;
 
   for (const url of urls) {
-    const res = await fetchSegment(url);
+    const res = await fetchSegment(url, strategy);
     const buf = await res.arrayBuffer();
     chunks.push(new Uint8Array(buf));
     downloaded++;
@@ -993,7 +1016,8 @@ function shouldTryQualityFallback(err) {
   return /\b(?:quality|audioquality|unsupported|subscription|plan)\b|not available\b/.test(msg);
 }
 
-async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress) {
+async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress, options = {}) {
+  const { allowProxyFallback = true } = options;
   const candidates = qualityCandidates(requestedQuality);
   let lastErr = null;
 
@@ -1003,8 +1027,17 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
       if (i > 0) {
         onProgress?.(0, 1, `Requested quality unavailable, retrying with ${q}…`);
       }
-      const streamInfo = await getTrackStream(trackId, q);
-      return { streamInfo, quality: q };
+      const streamRes = await getTrackStream(trackId, q, {
+        allowProxyFallback,
+        includeRequestMeta: true,
+      });
+      const streamInfo = streamRes?.data ?? streamRes;
+      // `includeRequestMeta` is always requested above; default only as a guard
+      // against unexpected response-shape changes.
+      const requestMeta = (streamRes && typeof streamRes === "object" && streamRes.requestMeta)
+        ? streamRes.requestMeta
+        : { usedProxy: false };
+      return { streamInfo, quality: q, requestMeta };
     } catch (err) {
       lastErr = err;
       if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
@@ -1017,6 +1050,10 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress)
 function isSegmentTokenExpiryError(err) {
   const msg = String(err?.message || "").toLowerCase();
   return /segment fetch failed: (401|403|410)\b|direct=(401|403|410)\b/.test(msg);
+}
+
+function getSegmentStrategyFromRequestMeta(requestMeta) {
+  return requestMeta.usedProxy ? "proxy-then-direct" : "direct-then-proxy";
 }
 
 /**
@@ -1064,6 +1101,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
   onProgress?.(0, 1, `Getting stream for "${title}"…`);
   const initial = await getTrackStreamWithFallback(trackId, quality, onProgress);
   let streamQuality = initial.quality;
+  let segmentStrategy = getSegmentStrategyFromRequestMeta(initial.requestMeta);
   let { urls, extension, encryptionType } = parseStreamManifest(initial.streamInfo);
 
   if (encryptionType && encryptionType !== "NONE") {
@@ -1074,8 +1112,10 @@ async function fetchTrackData(trackId, quality, onProgress) {
 
   const downloadFromUrls = async (segmentUrls) => {
     onProgress?.(0, segmentUrls.length, `Downloading ${segmentUrls.length} segment(s)…`);
-    return fetchSegments(segmentUrls, (done, total) =>
-      onProgress?.(done, total, `Downloading segment ${done}/${total}…`)
+    return fetchSegments(
+      segmentUrls,
+      (done, total) => onProgress?.(done, total, `Downloading segment ${done}/${total}…`),
+      segmentStrategy
     );
   };
 
@@ -1091,6 +1131,7 @@ async function fetchTrackData(trackId, quality, onProgress) {
     onProgress?.(0, 1, "Segment URL expired (401/403/410). Refreshing stream token and retrying once…");
     const refreshed = await getTrackStreamWithFallback(trackId, streamQuality, onProgress);
     streamQuality = refreshed.quality;
+    segmentStrategy = getSegmentStrategyFromRequestMeta(refreshed.requestMeta);
     const reparsed = parseStreamManifest(refreshed.streamInfo);
     urls = reparsed.urls;
     extension = reparsed.extension;
@@ -1100,7 +1141,28 @@ async function fetchTrackData(trackId, quality, onProgress) {
         `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
       );
     }
-    data = await downloadFromUrls(urls);
+    try {
+      data = await downloadFromUrls(urls);
+    } catch (retryErr) {
+      if (!isSegmentTokenExpiryError(retryErr)) throw retryErr;
+
+      onProgress?.(0, 1, "Segment still failing after stream refresh. Retrying with direct-only playback request…");
+      const directOnly = await getTrackStreamWithFallback(trackId, streamQuality, onProgress, {
+        allowProxyFallback: false,
+      });
+      streamQuality = directOnly.quality;
+      segmentStrategy = "direct-only";
+      const directParsed = parseStreamManifest(directOnly.streamInfo);
+      urls = directParsed.urls;
+      extension = directParsed.extension;
+      encryptionType = directParsed.encryptionType;
+      if (encryptionType && encryptionType !== "NONE") {
+        throw new Error(
+          `Stream is encrypted (${encryptionType}). Encrypted streams cannot be downloaded in the browser.`
+        );
+      }
+      data = await downloadFromUrls(urls);
+    }
   }
 
   return { data, extension, title, artist, rawTitle, rawArtist, trackNumber, discNumber, albumTitle, albumArtist, year, isrc, copyright, coverHash, lyrics };

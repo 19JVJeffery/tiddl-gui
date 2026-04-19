@@ -16,7 +16,11 @@ import { getValidToken, loadAuth, refreshToken } from "./auth.js";
 const MAX_PAGINATION_PAGES = 2000;
 
 async function apiFetch(endpoint, params = {}, options = {}) {
-  const { preferDirect = false } = options;
+  const {
+    preferDirect = false,
+    allowProxyFallback = true,
+    includeRequestMeta = false,
+  } = options;
   const auth = loadAuth();
   const defaultParams = { countryCode: auth?.country_code || "US" };
   const merged = { ...defaultParams, ...params };
@@ -39,7 +43,7 @@ async function apiFetch(endpoint, params = {}, options = {}) {
     } catch {
       json = {};
     }
-    return { res, json };
+    return { res, json, usedProxy: useProxy };
   }
 
   async function doPreferredRequest(token) {
@@ -47,6 +51,7 @@ async function apiFetch(endpoint, params = {}, options = {}) {
     try {
       return await doRequest(token, false);
     } catch (err) {
+      if (!allowProxyFallback) throw err;
       const msg = String(err?.message || "").toLowerCase();
       const shouldFallbackToProxy = err instanceof TypeError
         || /failed to fetch|networkerror|network error|load failed|cors|cross-origin/.test(msg);
@@ -59,13 +64,13 @@ async function apiFetch(endpoint, params = {}, options = {}) {
   let token = await getValidToken();
   if (!token) throw new Error("Not authenticated");
 
-  let { res, json } = await doPreferredRequest(token);
+  let { res, json, usedProxy } = await doPreferredRequest(token);
   if (!res.ok && (res.status === 401 || res.status === 403)) {
     try {
       const refreshed = await refreshToken();
       token = refreshed?.token;
       if (token) {
-        ({ res, json } = await doPreferredRequest(token));
+        ({ res, json, usedProxy } = await doPreferredRequest(token));
       }
     } catch {
       // Keep original error handling below.
@@ -75,6 +80,9 @@ async function apiFetch(endpoint, params = {}, options = {}) {
   if (!res.ok) {
     const msg = json?.userMessage || json?.error_description || `HTTP ${res.status}`;
     throw new Error(msg);
+  }
+  if (includeRequestMeta) {
+    return { data: json, requestMeta: { usedProxy: Boolean(usedProxy) } };
   }
   return json;
 }
@@ -245,18 +253,20 @@ export async function getTrackLyrics(trackId) {
   return apiFetch(`tracks/${trackId}/lyrics`);
 }
 
-export async function getTrackStream(trackId, quality = "HIGH") {
+export async function getTrackStream(trackId, quality = "HIGH", options = {}) {
+  const { allowProxyFallback = true, includeRequestMeta = false } = options;
   return apiFetch(`tracks/${trackId}/playbackinfopostpaywall`, {
     audioquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
-  }, { preferDirect: true });
+  }, { preferDirect: true, allowProxyFallback, includeRequestMeta });
 }
 
-export async function getVideoStream(videoId, quality = "HIGH") {
+export async function getVideoStream(videoId, quality = "HIGH", options = {}) {
+  const { allowProxyFallback = true, includeRequestMeta = false } = options;
   return apiFetch(`videos/${videoId}/playbackinfopostpaywall`, {
     videoquality: quality,
     playbackmode: "STREAM",
     assetpresentation: "FULL",
-  }, { preferDirect: true });
+  }, { preferDirect: true, allowProxyFallback, includeRequestMeta });
 }

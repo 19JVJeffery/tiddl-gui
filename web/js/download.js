@@ -65,8 +65,6 @@ function parseDashManifest(manifest) {
 
   const segTpl = pick("SegmentTemplate");
   const urlTemplate = segTpl?.getAttribute("media") || "";
-  const initTemplate = segTpl?.getAttribute("initialization") || "";
-  const startNumber = Math.max(parseInt(segTpl?.getAttribute("startNumber") || "1", 10) || 1, 0);
 
   const timeline = doc.getElementsByTagNameNS(NS, "S").length
     ? [...doc.getElementsByTagNameNS(NS, "S")]
@@ -77,7 +75,6 @@ function parseDashManifest(manifest) {
     const r = el.getAttribute("r");
     if (r) segmentCount += parseInt(r, 10);
   }
-  if (!segmentCount) segmentCount = 1;
 
   const baseUrl = (pick("BaseURL")?.textContent || "").trim();
   const resolveDashUrl = (u) => {
@@ -93,11 +90,12 @@ function parseDashManifest(manifest) {
       String(n).padStart(pad ? parseInt(pad, 10) : 0, "0")
     );
 
+  // Mirror tiddl's parse_manifest_XML: Tidal DASH manifests use segment 0 as
+  // the initialisation segment via the media template.  Generate indices 0
+  // through segmentCount (inclusive), matching Python's range(0, total + 1).
   const urls = [];
-  if (initTemplate) urls.push(resolveDashUrl(initTemplate));
-  for (let i = 0; i < segmentCount; i++) {
-    const segmentNumber = startNumber + i;
-    urls.push(resolveDashUrl(replaceNumber(urlTemplate, segmentNumber)));
+  for (let i = 0; i <= segmentCount; i++) {
+    urls.push(resolveDashUrl(replaceNumber(urlTemplate, i)));
   }
   if (!urls.length) {
     const err = new Error("Invalid DASH manifest: missing segment URLs");

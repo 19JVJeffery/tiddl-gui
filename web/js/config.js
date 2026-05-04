@@ -14,7 +14,7 @@
 import { robustFetch, API_TIMEOUT_MS, isNetworkError } from "./http.js";
 
 const _raw = atob(
-  "ZlgySnhkbW50WldLMGl4VDsxTm45QWZEQWp4cmdKRkpiS05XTGVBeUtHVkdtSU51WFBQTEhWWEF2eEFnPQ=="
+  "NE4zbjZRMXg5NUxMNUs3cDtvS09YZkpXMzcxY1g2eGFaMFB5aGdHTkJkTkxsQlpkNEFLS1lvdWdNamlrPQ=="
 );
 const [DEFAULT_CLIENT_ID, DEFAULT_CLIENT_SECRET] = _raw.split(";");
 

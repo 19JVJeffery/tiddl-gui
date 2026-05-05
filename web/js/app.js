@@ -414,7 +414,11 @@ async function startLogin() {
 
   try {
     const deviceAuth = await getDeviceAuth();
-    const uri = `https://${deviceAuth.verificationUriComplete}`;
+    // Normalize the verification URI: TIDAL may or may not include the scheme.
+    // Prepend https:// only when the field does not already start with a protocol.
+    const rawUri = deviceAuth.verificationUriComplete || deviceAuth.verificationUri;
+    if (!rawUri) throw new Error("No verification URI returned by TIDAL");
+    const uri = /^https?:\/\//i.test(rawUri) ? rawUri : `https://${rawUri}`;
     setHtml(loginStatus,
       `<p>Open the link below and approve the request, then wait here.</p>
        <a href="${escHtml(uri)}" target="_blank" rel="noopener" class="login-link">${escHtml(uri)}</a>`
@@ -445,7 +449,7 @@ async function startLogin() {
           loadLibraryIfNeeded();
         }, LOGIN_SUCCESS_REDIRECT_DELAY_MS);
       } catch (err) {
-        if (err?.status === 400 && err?.error === "authorization_pending") {
+        if (err?.error === "authorization_pending") {
           const secsLeft = Math.max(0, Math.round((endAt - Date.now()) / 1000));
           const mins = Math.floor(secsLeft / 60);
           const secs = secsLeft % 60;

@@ -38,6 +38,7 @@ import {
   initBrowserChrome, initUiEffectsUI,
   initExperimentalSettingUI,
 } from "./settings.js";
+import { isNetworkError } from "./http.js";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -471,8 +472,7 @@ async function startLogin() {
     pollTimer = setTimeout(poll, deviceAuth.interval * 1000);
   } catch (err) {
     const msg = err?.message || JSON.stringify(err);
-    const isNetworkError = msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("networkerror");
-    const hint = isNetworkError
+    const hint = isNetworkError(err)
       ? `<br><small style="opacity:0.8">A browser extension or firewall may be blocking the CORS proxy. Try disabling extensions, or change the proxy in Settings \u2192 Advanced.</small>`
       : "";
     setHtml(loginStatus, `<span class="error">Failed to start login: ${escHtml(msg)}${hint}</span>`);

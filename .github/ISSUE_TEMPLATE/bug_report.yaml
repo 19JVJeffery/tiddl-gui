@@ -14,6 +14,7 @@ body:
     attributes:
       label: What command was used?
       placeholder: tiddl
+      render: shell
       
   - type: textarea
     id: what-happened
@@ -31,6 +32,7 @@ body:
       options:
         - 3.13
         - 3.14
+        - 3.15
       default: 0
     validations:
       required: true
@@ -43,6 +45,12 @@ body:
         - Windows
         - Linux
         - MacOS
+  - type: textarea
+    id: tiddl
+    attributes:
+      label: tiddl version
+      description: tiddl version you have installed
+      render: shell
   - type: textarea
     id: logs
     attributes:

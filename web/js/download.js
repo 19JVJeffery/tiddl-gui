@@ -1062,6 +1062,7 @@ const QUALITY_FALLBACKS = {
 const PLAYBACK_NOT_READY_RETRIES = 3;
 const PLAYBACK_NOT_READY_RETRY_BASE_DELAY_MS = 1200;
 const TRACK_PLAYBACK_MODE_CANDIDATES = ["STREAM", "OFFLINE"];
+const SEGMENT_RECOVERY_PLAYBACK_MODES = ["OFFLINE", "STREAM"];
 const TRACK_DOWNLOAD_ALGORITHM_RETRIES = 1;
 
 function wait(ms) {
@@ -1110,15 +1111,19 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
   const {
     allowProxyFallback = true,
     preferDirect = true,
+    playbackModes = TRACK_PLAYBACK_MODE_CANDIDATES,
   } = options;
   const candidates = qualityCandidates(requestedQuality);
+  const normalizedPlaybackModes = Array.isArray(playbackModes) && playbackModes.length
+    ? playbackModes
+    : TRACK_PLAYBACK_MODE_CANDIDATES;
   let lastErr = null;
 
   for (let i = 0; i < candidates.length; i++) {
     const q = candidates[i];
     let tryNextQuality = false;
-    for (let modeIndex = 0; modeIndex < TRACK_PLAYBACK_MODE_CANDIDATES.length; modeIndex++) {
-      const playbackMode = TRACK_PLAYBACK_MODE_CANDIDATES[modeIndex];
+    for (let modeIndex = 0; modeIndex < normalizedPlaybackModes.length; modeIndex++) {
+      const playbackMode = normalizedPlaybackModes[modeIndex];
       for (let attempt = 0; attempt <= PLAYBACK_NOT_READY_RETRIES; attempt++) {
         try {
           if (i > 0 && attempt === 0 && modeIndex === 0) {
@@ -1154,7 +1159,7 @@ async function getTrackStreamWithFallback(trackId, requestedQuality, onProgress,
             await wait(retryDelayMs);
             continue;
           }
-          if (modeIndex < TRACK_PLAYBACK_MODE_CANDIDATES.length - 1 && shouldTryAlternatePlaybackMode(err)) {
+          if (modeIndex < normalizedPlaybackModes.length - 1 && shouldTryAlternatePlaybackMode(err)) {
             break;
           }
           if (i === candidates.length - 1 || !shouldTryQualityFallback(err)) throw err;
@@ -1254,8 +1259,10 @@ async function fetchTrackDataOnce(trackId, quality, onProgress) {
     // Single retry by design: an immediate re-fetch should provide fresh signed
     // segment URLs. Repeating beyond one retry risks long loops on persistent
     // permission/subscription/geoblocking failures and slows large queues.
-    onProgress?.(0, 1, "Segment URL expired (401/403/410). Refreshing stream token and retrying once…");
-    const refreshed = await getTrackStreamWithFallback(trackId, streamQuality, onProgress);
+    onProgress?.(0, 1, "Segment URL expired (401/403/410). Refreshing stream token (OFFLINE-first) and retrying once…");
+    const refreshed = await getTrackStreamWithFallback(trackId, streamQuality, onProgress, {
+      playbackModes: SEGMENT_RECOVERY_PLAYBACK_MODES,
+    });
     streamQuality = refreshed.quality;
     segmentStrategy = getSegmentStrategyFromRequestMeta(refreshed.requestMeta);
     const reparsed = refreshed.parsedManifest;
@@ -1266,10 +1273,11 @@ async function fetchTrackDataOnce(trackId, quality, onProgress) {
     } catch (retryErr) {
       if (!isSegmentTokenExpiryError(retryErr)) throw retryErr;
 
-      onProgress?.(0, 1, "Segment still failing after stream refresh. Retrying with direct-only playback request…");
+      onProgress?.(0, 1, "Segment still failing after stream refresh. Retrying with direct-only OFFLINE-first playback request…");
       const directOnly = await getTrackStreamWithFallback(trackId, streamQuality, onProgress, {
         allowProxyFallback: false,
         preferDirect: true,
+        playbackModes: SEGMENT_RECOVERY_PLAYBACK_MODES,
       });
       streamQuality = directOnly.quality;
       segmentStrategy = getSegmentStrategyFromRequestMeta(directOnly.requestMeta);
@@ -1287,6 +1295,7 @@ async function fetchTrackDataOnce(trackId, quality, onProgress) {
         const proxyOnly = await getTrackStreamWithFallback(trackId, streamQuality, onProgress, {
           allowProxyFallback: false,
           preferDirect: false,
+          playbackModes: SEGMENT_RECOVERY_PLAYBACK_MODES,
         });
         streamQuality = proxyOnly.quality;
         segmentStrategy = "proxy-only";
